@@ -28,8 +28,7 @@ wheels/
 .pytest_cache/
 
 # Data & Model Training Artifacts
-results/models/
-results/tables/*.csv
+
 *.log
 
 # IDE & OS Files
