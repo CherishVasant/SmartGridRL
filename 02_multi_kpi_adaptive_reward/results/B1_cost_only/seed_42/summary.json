@@ -1,0 +1,59 @@
+{
+  "method": "B1_cost_only",
+  "label": "Cost-Only",
+  "seed": 42,
+  "env_steps_trained": 200000,
+  "kpis": {
+    "cost": 4513.734515247816,
+    "carbon": 5648.695220671378,
+    "ramping": 29475.041641971075,
+    "daily_peak": 11.117060924279079,
+    "annual_peak": 21.71841597557068,
+    "one_minus_load_factor": 0.8909228493318727,
+    "electricity_consumption": 36311.648447328145,
+    "zero_net_energy": 17917.71287164606,
+    "carbon_per_kwh_imported": 0.15556151984851616,
+    "battery_cycles": 379.7996288162714,
+    "self_consumption": 0.5968556794602623
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.9237265911555421,
+    "carbon": 1.0350663812792573,
+    "ramping": 1.7121621802372096,
+    "daily_peak": 1.1740830669771078,
+    "annual_peak": 1.2345573869119322,
+    "one_minus_load_factor": 1.0373697464464262,
+    "electricity_consumption": 1.0001305413718338,
+    "zero_net_energy": 0.9922358542696013,
+    "carbon_per_kwh_imported": 1.0349312799302217,
+    "battery_cycles": 1.141434139152129,
+    "self_consumption": 1.3599774427145614,
+    "score": 1.1861608921679128
+  },
+  "mu_final": {
+    "carbon": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ramp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "peak": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

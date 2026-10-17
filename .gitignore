@@ -36,3 +36,6 @@ wheels/
 .idea/
 .DS_Store
 Thumbs.db
+
+# SAC replay buffers (too large for GitHub)
+replay_buffer.pkl

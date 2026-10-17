@@ -1,0 +1,2 @@
+method,seed,cost,carbon,self_consumption,reward
+Static-weighted PPO,100,4756.498083753818,5583.3680095380205,0.5547433946099578,-14878.773472163553

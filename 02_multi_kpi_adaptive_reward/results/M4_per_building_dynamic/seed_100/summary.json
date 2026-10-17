@@ -1,0 +1,59 @@
+{
+  "method": "M4_per_building_dynamic",
+  "label": "Per-building Dynamic",
+  "seed": 100,
+  "env_steps_trained": 200000,
+  "kpis": {
+    "cost": 3466.0369733923017,
+    "carbon": 5291.680656729583,
+    "ramping": 37324.11461948226,
+    "daily_peak": 16.10066394008652,
+    "annual_peak": 34.878183364868164,
+    "one_minus_load_factor": 0.927896697828678,
+    "electricity_consumption": 33380.172723178526,
+    "zero_net_energy": 17600.88329693047,
+    "carbon_per_kwh_imported": 0.1585276595364992,
+    "battery_cycles": 318.76728297204244,
+    "self_consumption": 0.6732333585040398
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.709317419408519,
+    "carbon": 0.969647066140618,
+    "ramping": 2.1681033817885647,
+    "daily_peak": 1.7004059821117123,
+    "annual_peak": 1.9826086287140208,
+    "one_minus_load_factor": 1.0804212316216502,
+    "electricity_consumption": 0.9193890017178311,
+    "zero_net_energy": 0.9746906649936155,
+    "carbon_per_kwh_imported": 1.0546646352402327,
+    "battery_cycles": 0.9580100443043618,
+    "self_consumption": 1.534009330490785,
+    "score": 1.4350839516308476
+  },
+  "mu_final": {
+    "carbon": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ramp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "peak": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

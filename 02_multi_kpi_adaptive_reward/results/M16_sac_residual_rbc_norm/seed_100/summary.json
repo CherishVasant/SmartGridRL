@@ -1,0 +1,59 @@
+{
+  "method": "M16_sac_residual_rbc_norm",
+  "label": "Residual SAC on RBC + norm",
+  "seed": 100,
+  "env_steps_trained": 200000,
+  "kpis": {
+    "cost": 5366.1634624049875,
+    "carbon": 4769.233053876332,
+    "ramping": 16508.89033259812,
+    "daily_peak": 8.171020328964302,
+    "annual_peak": 16.157751321792603,
+    "one_minus_load_factor": 0.8685185011751223,
+    "electricity_consumption": 30242.742870310933,
+    "zero_net_energy": 16546.329527555405,
+    "carbon_per_kwh_imported": 0.1576984294820114,
+    "battery_cycles": 94.83545916478178,
+    "self_consumption": 0.5890762897622568
+  },
+  "ratios_vs_rbc": {
+    "cost": 1.0981744420204642,
+    "carbon": 0.8739138165019407,
+    "ramping": 0.9589773615420063,
+    "daily_peak": 0.8629490000555,
+    "annual_peak": 0.9184680536850682,
+    "one_minus_load_factor": 1.0112826470033092,
+    "electricity_consumption": 0.8329748742563304,
+    "zero_net_energy": 0.9162922484253423,
+    "carbon_per_kwh_imported": 1.049147871695602,
+    "battery_cycles": 0.2850145773713088,
+    "self_consumption": 1.3422515587673047,
+    "score": 0.9539608868013815
+  },
+  "mu_final": {
+    "carbon": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ramp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "peak": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

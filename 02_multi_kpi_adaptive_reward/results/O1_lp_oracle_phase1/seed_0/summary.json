@@ -1,0 +1,33 @@
+{
+  "method": "O1_lp_oracle_phase1",
+  "label": "LP oracle (perfect foresight), w_grid=0.0",
+  "seed": 0,
+  "kpis": {
+    "cost": 4033.51648028401,
+    "carbon": 5240.0423438969065,
+    "ramping": 17003.859034507463,
+    "daily_peak": 13.182608076573235,
+    "annual_peak": 36.367599964141846,
+    "one_minus_load_factor": 0.9375119776187556,
+    "electricity_consumption": 34150.646660583065,
+    "zero_net_energy": 17912.76570982748,
+    "carbon_per_kwh_imported": 0.15343903721580193,
+    "battery_cycles": 379.48410730139585,
+    "self_consumption": 0.6665050908231954
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.8254509466864134,
+    "carbon": 0.9601848665509699,
+    "ramping": 0.9877293715342003,
+    "daily_peak": 1.3922274085498891,
+    "annual_peak": 2.0672727343693715,
+    "one_minus_load_factor": 1.091617038716871,
+    "electricity_consumption": 0.9406101400874385,
+    "zero_net_energy": 0.9919618934483495,
+    "carbon_per_kwh_imported": 1.0208106691915013,
+    "battery_cycles": 1.140485883805386,
+    "self_consumption": 1.5186785016331816,
+    "score": 1.2207470610679525
+  },
+  "planned_objective": 1.2162224815237184
+}

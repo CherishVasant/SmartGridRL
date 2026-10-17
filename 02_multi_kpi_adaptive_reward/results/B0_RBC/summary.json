@@ -1,0 +1,17 @@
+{
+  "method": "B0_RBC",
+  "seed": null,
+  "kpis": {
+    "cost": 4886.4399471290835,
+    "carbon": 5457.326527879355,
+    "ramping": 17215.09911980855,
+    "daily_peak": 9.468717535380176,
+    "annual_peak": 17.592066764831543,
+    "one_minus_load_factor": 0.8588286407848154,
+    "electricity_consumption": 36306.90889363413,
+    "zero_net_energy": 18057.917172158166,
+    "carbon_per_kwh_imported": 0.1503109654382121,
+    "battery_cycles": 332.7389779128134,
+    "self_consumption": 0.43887174942322427
+  }
+}
