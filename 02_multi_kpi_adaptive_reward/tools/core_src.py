@@ -215,7 +215,141 @@ METHODS = {
                                'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
                                'mu_fixed': {'ramp': 0.5, 'peak': 0.5}, 'residual': True, 'residual_base': 'O2_lp_oracle_grid',
                                'residual_scale': 1.0, 'label': 'Residual SAC on grid LP plan, full-range correction'},
+    # Round 7: behaviour cloning of the LP plans (the policy needs only the current observation, not the plan), alone
+    # (env_steps 1000 = no SAC update, since learning starts after 1,000 steps) or as the start of SAC fine-tuning
+    'M33_bc_lp_grid': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                       'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                       'mu_fixed': {'ramp': 0.5, 'peak': 0.5}, 'normalize': True, 'normalize_reward': False,
+                       'bc_from': 'O2_lp_oracle_grid', 'env_steps': 1000, 'label': 'Behaviour clone of grid LP plan'},
+    'M34_bc_lp_grid_sac': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                           'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                           'mu_fixed': {'ramp': 0.5, 'peak': 0.5}, 'normalize': True, 'normalize_reward': False,
+                           'bc_from': 'O2_lp_oracle_grid', 'sac_params': {'ent_coef': 'auto_0.05'},
+                           'label': 'Behaviour clone of grid LP plan + SAC fine-tuning (score reward)'},
+    'M35_bc_lp_phase1': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                         'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                         'mu_fixed': {'ramp': 0.2, 'peak': 0.2}, 'normalize': True, 'normalize_reward': False,
+                         'bc_from': 'O3_lp_phase1_eff087', 'env_steps': 1000, 'label': 'Behaviour clone of Phase I LP plan'},
+    'M36_bc_lp_phase1_sac': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                             'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                             'mu_fixed': {'ramp': 0.2, 'peak': 0.2}, 'normalize': True, 'normalize_reward': False,
+                             'bc_from': 'O3_lp_phase1_eff087', 'sac_params': {'ent_coef': 'auto_0.05'},
+                             'label': 'Behaviour clone of Phase I LP plan + SAC fine-tuning (Phase I reward)'},
+    # Round 8: better imitation of the smooth grid plan (cloning O2 beat cloning O3 even on the Phase I score):
+    # a bigger network, DAgger (states the clone visits, labelled with the action that steers back to the plan's SoC),
+    # and a smoother plan to clone (O8, grid weight 2)
+    'M37_bc_grid_big_dagger': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                               'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                               'mu_fixed': {'ramp': 0.5, 'peak': 0.5}, 'normalize': True, 'normalize_reward': False,
+                               'bc_from': 'O2_lp_oracle_grid', 'bc_dagger_iters': 3, 'net_arch': [256, 256],
+                               'env_steps': 1000, 'label': 'Clone of grid LP plan, 256x256 + DAgger'},
+    'M38_bc_grid_big': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                        'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                        'mu_fixed': {'ramp': 0.5, 'peak': 0.5}, 'normalize': True, 'normalize_reward': False,
+                        'bc_from': 'O2_lp_oracle_grid', 'net_arch': [256, 256], 'env_steps': 1000,
+                        'label': 'Clone of grid LP plan, 256x256'},
+    'M39_bc_grid_dagger': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                           'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                           'mu_fixed': {'ramp': 0.5, 'peak': 0.5}, 'normalize': True, 'normalize_reward': False,
+                           'bc_from': 'O2_lp_oracle_grid', 'bc_dagger_iters': 3, 'env_steps': 1000,
+                           'label': 'Clone of grid LP plan + DAgger'},
+    'M40_bc_grid2_big_dagger': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                                'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                                'mu_fixed': {'ramp': 0.5, 'peak': 0.5}, 'normalize': True, 'normalize_reward': False,
+                                'bc_from': 'O8_lp_grid2', 'bc_dagger_iters': 3, 'net_arch': [256, 256],
+                                'env_steps': 1000, 'label': 'Clone of smoother LP plan (grid weight 2), 256x256 + DAgger'},
+    # Round 9: gentle DAgger (30% of the SoC error per hour instead of a one-hour catch-up) with the big clone, and the big
+    # clone as the start of SAC fine-tuning with the best RL reward so far (M27: score-aligned, carbon 2)
+    'M41_bc_grid_big_gentle': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                               'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                               'mu_fixed': {'ramp': 0.5, 'peak': 0.5}, 'normalize': True, 'normalize_reward': False,
+                               'bc_from': 'O2_lp_oracle_grid', 'bc_dagger_iters': 3, 'bc_dagger_gain': 0.3,
+                               'net_arch': [256, 256], 'env_steps': 1000,
+                               'label': 'Clone of grid LP plan, 256x256 + gentle DAgger'},
+    'M42_bc_grid2_big_gentle': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                                'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                                'mu_fixed': {'ramp': 0.5, 'peak': 0.5}, 'normalize': True, 'normalize_reward': False,
+                                'bc_from': 'O8_lp_grid2', 'bc_dagger_iters': 3, 'bc_dagger_gain': 0.3,
+                                'net_arch': [256, 256], 'env_steps': 1000,
+                                'label': 'Clone of smoother LP plan, 256x256 + gentle DAgger'},
+    'M43_bc_grid_big_sac_c2': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                               'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                               'mu_fixed': {'carbon': 2.0, 'ramp': 0.5, 'peak': 0.5}, 'normalize': True,
+                               'normalize_reward': False, 'bc_from': 'O2_lp_oracle_grid', 'net_arch': [256, 256],
+                               'sac_params': {'ent_coef': 'auto_0.05'},
+                               'label': 'Big clone of grid LP plan + SAC fine-tuning (score reward, carbon 2)'},
+    'M44_bc_grid2_big_sac_c2': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                                'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                                'mu_fixed': {'carbon': 2.0, 'ramp': 0.5, 'peak': 0.5}, 'normalize': True,
+                                'normalize_reward': False, 'bc_from': 'O8_lp_grid2', 'net_arch': [256, 256],
+                                'sac_params': {'ent_coef': 'auto_0.05'},
+                                'label': 'Big clone of smoother LP plan + SAC fine-tuning (score reward, carbon 2)'},
+    # The 256x256 clone alone (M38) was worse than the 64x64 one (M33) despite a 10x lower fit error: it overfits the
+    # plan's own trajectory and recovers worse from drift. So the two best Round 9 ideas also get the 64x64 actor:
+    'M45_bc_grid_gentle': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                           'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                           'mu_fixed': {'ramp': 0.5, 'peak': 0.5}, 'normalize': True, 'normalize_reward': False,
+                           'bc_from': 'O2_lp_oracle_grid', 'bc_dagger_iters': 3, 'bc_dagger_gain': 0.3, 'env_steps': 1000,
+                           'label': 'Clone of grid LP plan + gentle DAgger'},
+    'M46_bc_grid_sac_c2': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                           'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                           'mu_fixed': {'carbon': 2.0, 'ramp': 0.5, 'peak': 0.5}, 'normalize': True,
+                           'normalize_reward': False, 'bc_from': 'O2_lp_oracle_grid', 'sac_params': {'ent_coef': 'auto_0.05'},
+                           'label': 'Clone of grid LP plan + SAC fine-tuning (score reward, carbon 2)'},
+    # Round 10: the 3-seed ensemble of M33 clones beat every single seed (Phase I 0.734 vs 0.747-0.753), so M47 trains the
+    # same clone on 7 more seeds (1-7) purely as ensemble members (tools/ensemble_eval.py); it is not a separate method
+    'M47_bc_grid_members': {'agent': 'central', 'reward': 'multikpi', 'adaptive': False, 'phi': 'none', 'algo': 'sac',
+                            'counterfactual': True, 'full_day_peak': True, 'official_terms': True, 'norm_ref': 'no_battery',
+                            'mu_fixed': {'ramp': 0.5, 'peak': 0.5}, 'normalize': True, 'normalize_reward': False,
+                            'bc_from': 'O2_lp_oracle_grid', 'env_steps': 1000,
+                            'label': 'Clone of grid LP plan (as M33), extra seeds for ensembles'},
 }
+# Round 11: double down on M41 (256x256 clone + gentle DAgger), the best single model (seed 42: Phase I 0.720,
+# mean(C, G, D) 0.751, G 0.775). Each variant changes one thing.
+_M41 = METHODS['M41_bc_grid_big_gentle']
+METHODS.update({
+    'M48_bc_big_gentle_members': dict(_M41, label='Big clone + gentle DAgger (as M41), extra seeds for ensembles'),
+    'M49_bc_big_gentle_dagger6': dict(_M41, bc_dagger_iters=6, label='Big clone + gentle DAgger, 6 iterations'),
+    'M50_bc_big_gentle_gain05': dict(_M41, bc_dagger_gain=0.5, label='Big clone + gentle DAgger, gain 0.5'),
+    'M51_bc_deep_gentle': dict(_M41, net_arch=[256, 256, 256], label='Deep clone (3x256) + gentle DAgger'),
+})
+# Round 12: double down on M51 (3x256 + gentle DAgger; seed 42: Phase I 0.685, mean(C, G, D) 0.687, G 0.745)
+_M51 = METHODS['M51_bc_deep_gentle']
+METHODS.update({
+    'M52_bc_deep_members': dict(_M51, label='Deep clone + gentle DAgger (as M51), extra seeds for ensembles'),
+    'M53_bc_deeper_gentle': dict(_M51, net_arch=[256, 256, 256, 256], label='Deeper clone (4x256) + gentle DAgger'),
+    'M54_bc_wide_gentle': dict(_M51, net_arch=[512, 512, 512], label='Wide deep clone (3x512) + gentle DAgger'),
+    'M55_bc_deep_gentle_o8': dict(_M51, bc_from='O8_lp_grid2', label='Deep clone of the smoother plan O8 + gentle DAgger'),
+    'M56_bc_deep_dagger6': dict(_M51, bc_dagger_iters=6, label='Deep clone + gentle DAgger, 6 iterations'),
+})
+# Round 13: the deep clone (Phase I ~0.687) is close to its plan O2 (0.658), which gives up cost/carbon for smoothness.
+# To reach the published top 3 (<= 0.651), clone plans with a better Phase I score, now that deep + gentle DAgger
+# copes with less smooth targets (the 64x64 plain clone of O3 managed only 0.797)
+METHODS.update({
+    'M57_bc_deep_o6': dict(_M51, bc_from='O6_lp_grid05', label='Deep clone of LP plan with grid weight 0.5 (O6) + gentle DAgger'),
+    'M58_bc_deep_o3': dict(_M51, bc_from='O3_lp_phase1_eff087', label='Deep clone of Phase I LP plan (O3) + gentle DAgger'),
+    'M59_bc_deep_o9': dict(_M51, bc_from='O9_lp_grid025', label='Deep clone of LP plan with grid weight 0.25 (O9) + gentle DAgger'),
+    'M60_bc_deep_o6_dagger6': dict(_M51, bc_from='O6_lp_grid05', bc_dagger_iters=6,
+                                   label='Deep clone of O6 + gentle DAgger, 6 iterations'),
+})
+# Round 14: capacity keeps helping with gentle DAgger (seed 42 Phase I / Score: 3x256 0.685 / 0.687, 4x256 0.681 / 0.672,
+# 3x512 0.671 / 0.652), and 6 DAgger iterations beat 3 (M49). Combine: bigger networks, more DAgger, better plans
+_M54 = METHODS['M54_bc_wide_gentle']
+METHODS.update({
+    'M61_bc_4x512': dict(_M54, net_arch=[512, 512, 512, 512], label='Clone 4x512 + gentle DAgger'),
+    'M62_bc_3x1024': dict(_M54, net_arch=[1024, 1024, 1024], label='Clone 3x1024 + gentle DAgger'),
+    'M63_bc_3x512_dagger6': dict(_M54, bc_dagger_iters=6, label='Clone 3x512 + gentle DAgger, 6 iterations'),
+    'M64_bc_3x512_o9': dict(_M54, bc_from='O9_lp_grid025', label='Clone 3x512 of LP plan O9 (grid weight 0.25) + gentle DAgger'),
+})
+# Round 15: the deep clone of the Phase I plan O3 (M58) reached Phase I 0.658 and carbon 0.717 (published #3: 0.651;
+# best published carbon on Phase I among the top 2: 0.718 / 0.691). Bigger networks on O3, aimed at the top 3
+METHODS.update({
+    'M65_bc_3x512_o3': dict(_M54, bc_from='O3_lp_phase1_eff087', label='Clone 3x512 of Phase I LP plan O3 + gentle DAgger'),
+    'M66_bc_4x512_o3': dict(_M54, bc_from='O3_lp_phase1_eff087', net_arch=[512, 512, 512, 512],
+                            label='Clone 4x512 of Phase I LP plan O3 + gentle DAgger'),
+    'M67_bc_3x512_o3_dagger6': dict(_M54, bc_from='O3_lp_phase1_eff087', bc_dagger_iters=6,
+                                    label='Clone 3x512 of Phase I LP plan O3 + gentle DAgger, 6 iterations'),
+})
 RBC_FOLDER = 'B0_RBC'
 
 print(f"Core config loaded. Results folder: {RESULTS_DIR}  |  TOTAL_ENV_STEPS = {TOTAL_ENV_STEPS:,}"
@@ -564,6 +698,17 @@ def make_state(env, method, rbc):
                 state['norm'][k] = np.full(n + 1, max(abs(v[steps].mean()), 1e-6))
     return state
 
+def load_cached_actions(name, n, prefix='action_b'):
+    """Actions (or, with prefix='soc_b', states of charge) of a cached controller's eval trace by step (row t = the
+    action that produced step t / the SoC after it). `name` is a results folder: B0_RBC (trace at its top level) or a run
+    like an LP plan in <name>/seed_0/."""
+    candidates = [RESULTS_DIR / name / 'eval_trace.csv', RESULTS_DIR / name / 'seed_0' / 'eval_trace.csv',
+                  PHASE_DIR / 'results' / name / 'eval_trace.csv', PHASE_DIR / 'results' / name / 'seed_0' / 'eval_trace.csv']
+    trace = pd.read_csv(next(p for p in candidates if p.exists()))
+    actions = np.zeros((int(trace['step'].max()) + 1, n))
+    actions[trace['step'].values] = trace[[f'{prefix}{i}' for i in range(n)]].values
+    return actions
+
 def load_no_battery_terms(time_steps):
     """District cost / carbon / ramp / peak of the no-battery run (B5, made by 99_compare_results), indexed by step."""
     # The smoke-test folder has no B5 run, so fall back to the real results folder
@@ -628,12 +773,7 @@ class CentralEnv(gym.Env):
         self.rbc_actions = None
         self.residual_scale = METHODS[method].get('residual_scale', 1.0)
         if METHODS[method].get('residual'):
-            base_name = METHODS[method].get('residual_base')
-            trace = rbc['trace'] if base_name is None else pd.read_csv(
-                next(p for p in [RESULTS_DIR / base_name / 'seed_0' / 'eval_trace.csv',
-                                 PHASE_DIR / 'results' / base_name / 'seed_0' / 'eval_trace.csv'] if p.exists()))
-            self.rbc_actions = np.zeros((int(trace['step'].max()) + 1, len(self.env.buildings)))
-            self.rbc_actions[trace['step'].values] = trace[[f'action_b{i}' for i in range(len(self.env.buildings))]].values
+            self.rbc_actions = load_cached_actions(METHODS[method].get('residual_base', RBC_FOLDER), len(self.env.buildings))
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -803,6 +943,72 @@ def make_training_env(method, base, run_dir):
                         gamma=gamma)
 
 
+BC_EPOCHS = 30 if SMOKE_TEST else 300
+
+def bc_pretrain(model, method, base, env):
+    """Behaviour cloning: fits the SAC actor's deterministic action to a cached controller's actions (`bc_from`, e.g. a
+    perfect-foresight LP plan), on the observations seen along that controller's own trajectory. The cloned policy only
+    needs the current observation, not the plan. With VecNormalize, the observation statistics are set from that data."""
+    plan = load_cached_actions(METHODS[method]['bc_from'], len(base.env.buildings))
+    obs_list, act_list = [], []
+    obs = base.policy_obs(reset_state(base.state, base.seed_value))
+    while True:
+        a = plan[min(base.env.time_step + 1, len(plan) - 1)].astype(np.float32)
+        obs_list.append(obs)
+        act_list.append(a)
+        cl_obs, _, done, _, _ = env_step(base.state, [a])
+        obs = base.policy_obs(cl_obs)
+        if done:
+            break
+    X_raw = np.array(obs_list, dtype=np.float32)
+    if isinstance(env, VecNormalize):
+        env.obs_rms.mean, env.obs_rms.var, env.obs_rms.count = X_raw.mean(0), X_raw.var(0) + 1e-8, float(len(X_raw))
+    scale = env.normalize_obs if isinstance(env, VecNormalize) else (lambda o: o)
+    to_unit = lambda a: np.clip(model.policy.scale_action(np.asarray(a)), -0.999, 0.999)   # actor's [-1, 1] range
+    X, Y = scale(X_raw), to_unit(act_list)
+    opt = torch.optim.Adam(model.actor.parameters(), lr=1e-3)
+
+    def fit(X, Y, epochs):
+        Xt, Yt = torch.tensor(X, dtype=torch.float32), torch.tensor(Y, dtype=torch.float32)
+        for epoch in range(epochs):
+            perm = torch.randperm(len(Xt))
+            for i in range(0, len(Xt), 256):
+                idx = perm[i:i + 256]
+                loss = torch.nn.functional.mse_loss(model.actor(Xt[idx], deterministic=True), Yt[idx])
+                opt.zero_grad()
+                loss.backward()
+                opt.step()
+        with torch.no_grad():
+            return torch.nn.functional.mse_loss(model.actor(Xt, deterministic=True), Yt).item()
+
+    final = fit(X, Y, BC_EPOCHS)
+    print(f"  behaviour cloning from {METHODS[method]['bc_from']}: {len(X):,} samples, {BC_EPOCHS} epochs, "
+          f"final MSE {final:.4f} (actions scaled to [-1, 1])")
+    # DAgger: roll the clone out, label every state it visits with the expert's action there, aggregate, refit. The expert
+    # is the plan's action for that hour plus a correction of `bc_dagger_gain` x the state-of-charge error (gain 1 = catch
+    # up in one hour, which Round 8 showed makes the clone jumpy; smaller gains recover over several hours)
+    plan_soc = load_cached_actions(METHODS[method]['bc_from'], len(base.env.buildings), prefix='soc_b')
+    gain = METHODS[method].get('bc_dagger_gain', 1.0)
+    eta = 0.9 ** 0.5
+    for it in range(METHODS[method].get('bc_dagger_iters', 0)):
+        obs, new_X, new_Y, done = base.policy_obs(reset_state(base.state, base.seed_value)), [], [], False
+        while not done:
+            t_next = min(base.env.time_step + 1, len(plan_soc) - 1)
+            cur = np.array([b.electrical_storage.soc[b.electrical_storage.time_step] for b in base.env.buildings])
+            error = plan_soc[t_next - 1] - cur                                   # how far below the plan's SoC we are now
+            correction = gain * np.where(error >= 0, error / eta, error * eta)
+            expert = np.clip(plan[t_next] + correction, -0.78125, 0.78125)
+            new_X.append(obs)
+            new_Y.append(expert)
+            with torch.no_grad():
+                a = model.actor(torch.tensor(scale(obs[None]), dtype=torch.float32), deterministic=True).numpy()[0]
+            cl_obs, _, done, _, _ = env_step(base.state, [model.policy.unscale_action(a).astype(np.float32)])
+            obs = base.policy_obs(cl_obs)
+        X, Y = np.concatenate([X, scale(np.array(new_X, dtype=np.float32))]), np.concatenate([Y, to_unit(new_Y)])
+        final = fit(X, Y, max(BC_EPOCHS // 3, 1))
+        print(f"  DAgger iteration {it + 1}: {len(X):,} samples, MSE {final:.4f}")
+
+
 def train_run(method, seed, rbc):
     """Trains (or resumes, or loads) one method x seed. Returns (model, base env, training env)."""
     run_dir = run_dir_of(method, seed)
@@ -840,6 +1046,8 @@ def train_run(method, seed, rbc):
     else:
         model = new_model()
         log_rows = []
+        if cfg.get('bc_from'):
+            bc_pretrain(model, method, base, env)
 
     remaining = total_env_steps(method) * n_envs - model.num_timesteps
     if remaining > 0:

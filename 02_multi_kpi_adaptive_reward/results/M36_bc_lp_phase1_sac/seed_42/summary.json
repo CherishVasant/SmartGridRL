@@ -1,0 +1,59 @@
+{
+  "method": "M36_bc_lp_phase1_sac",
+  "label": "Behaviour clone of Phase I LP plan + SAC fine-tuning (Phase I reward)",
+  "seed": 42,
+  "env_steps_trained": 200000,
+  "kpis": {
+    "cost": 4170.463263949483,
+    "carbon": 5052.421141584335,
+    "ramping": 17938.037886036545,
+    "daily_peak": 7.185603571330916,
+    "annual_peak": 15.295783281326294,
+    "one_minus_load_factor": 0.8459623810130724,
+    "electricity_consumption": 31973.73842115474,
+    "zero_net_energy": 17372.41907164944,
+    "carbon_per_kwh_imported": 0.15801784186241757,
+    "battery_cycles": 289.77816724663137,
+    "self_consumption": 0.6733622699385269
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.8534768275213827,
+    "carbon": 0.9258051750749169,
+    "ramping": 1.041994458538792,
+    "daily_peak": 0.7588782265899972,
+    "annual_peak": 0.8694705111001642,
+    "one_minus_load_factor": 0.9850188277838691,
+    "electricity_consumption": 0.8806516278988668,
+    "zero_net_energy": 0.962038916560896,
+    "carbon_per_kwh_imported": 1.0512728821994928,
+    "battery_cycles": 0.8708873515941408,
+    "self_consumption": 1.5343030642174522,
+    "score": 0.9057740044348536
+  },
+  "mu_final": {
+    "carbon": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ramp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "peak": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

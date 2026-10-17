@@ -1,0 +1,59 @@
+{
+  "method": "M59_bc_deep_o9",
+  "label": "Deep clone of LP plan with grid weight 0.25 (O9) + gentle DAgger",
+  "seed": 42,
+  "env_steps_trained": 1000,
+  "kpis": {
+    "cost": 4156.789536509842,
+    "carbon": 5078.2065646327765,
+    "ramping": 8341.289221378576,
+    "daily_peak": 6.14615348049439,
+    "annual_peak": 11.672151446342468,
+    "one_minus_load_factor": 0.783468646614824,
+    "electricity_consumption": 32724.76291536417,
+    "zero_net_energy": 18087.889889860868,
+    "carbon_per_kwh_imported": 0.15517932330836154,
+    "battery_cycles": 406.43795928528453,
+    "self_consumption": 0.685058844015593
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.8506785270024794,
+    "carbon": 0.9305300935705785,
+    "ramping": 0.48453332527029563,
+    "daily_peak": 0.6491009429237998,
+    "annual_peak": 0.6634894923020853,
+    "one_minus_load_factor": 0.9122525838202998,
+    "electricity_consumption": 0.9013370708929166,
+    "zero_net_energy": 1.0016598103434051,
+    "carbon_per_kwh_imported": 1.032388574286356,
+    "battery_cycles": 1.2214918788137357,
+    "self_consumption": 1.5609545269567104,
+    "score": 0.7484308274815897
+  },
+  "mu_final": {
+    "carbon": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ramp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "peak": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

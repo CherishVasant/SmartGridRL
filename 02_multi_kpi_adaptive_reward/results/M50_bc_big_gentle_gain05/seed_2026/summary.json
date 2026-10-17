@@ -1,0 +1,59 @@
+{
+  "method": "M50_bc_big_gentle_gain05",
+  "label": "Big clone + gentle DAgger, gain 0.5",
+  "seed": 2026,
+  "env_steps_trained": 1000,
+  "kpis": {
+    "cost": 4549.834932526661,
+    "carbon": 5058.806562339953,
+    "ramping": 11665.867645855691,
+    "daily_peak": 5.874924365322008,
+    "annual_peak": 12.034953832626343,
+    "one_minus_load_factor": 0.7850778857188465,
+    "electricity_consumption": 32206.194466027624,
+    "zero_net_energy": 18383.934834464577,
+    "carbon_per_kwh_imported": 0.1570755764912301,
+    "battery_cycles": 448.85395021596344,
+    "self_consumption": 0.6937405797018062
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.9311144681517702,
+    "carbon": 0.9269752389739704,
+    "ramping": 0.6776532371185922,
+    "daily_peak": 0.6204561856840866,
+    "annual_peak": 0.6841125601390694,
+    "one_minus_load_factor": 0.9141263442279081,
+    "electricity_consumption": 0.8870541571131796,
+    "zero_net_energy": 1.0180540014221058,
+    "carbon_per_kwh_imported": 1.0450041088705448,
+    "battery_cycles": 1.3489671484582586,
+    "self_consumption": 1.5807364693980341,
+    "score": 0.7924063390492329
+  },
+  "mu_final": {
+    "carbon": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ramp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "peak": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

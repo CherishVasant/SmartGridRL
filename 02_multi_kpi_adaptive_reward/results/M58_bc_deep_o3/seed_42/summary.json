@@ -1,0 +1,59 @@
+{
+  "method": "M58_bc_deep_o3",
+  "label": "Deep clone of Phase I LP plan (O3) + gentle DAgger",
+  "seed": 42,
+  "env_steps_trained": 1000,
+  "kpis": {
+    "cost": 4139.079976632376,
+    "carbon": 5127.099406493802,
+    "ramping": 17462.159351234935,
+    "daily_peak": 12.433202390183967,
+    "annual_peak": 36.54231643676758,
+    "one_minus_load_factor": 0.9367121967407571,
+    "electricity_consumption": 33325.99800579786,
+    "zero_net_energy": 17900.085779424415,
+    "carbon_per_kwh_imported": 0.15384683770315954,
+    "battery_cycles": 376.3156277110953,
+    "self_consumption": 0.6672389848588551
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.8470543015808878,
+    "carbon": 0.9394892133174456,
+    "ramping": 1.0143513685112684,
+    "daily_peak": 1.3130819821931423,
+    "annual_peak": 2.077204283343197,
+    "one_minus_load_factor": 1.0906857925520161,
+    "electricity_consumption": 0.9178968692551261,
+    "zero_net_energy": 0.9912597122232293,
+    "carbon_per_kwh_imported": 1.023523714684681,
+    "battery_cycles": 1.1309634659324468,
+    "self_consumption": 1.5203507305625312,
+    "score": 1.2136444902496597
+  },
+  "mu_final": {
+    "carbon": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ramp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "peak": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

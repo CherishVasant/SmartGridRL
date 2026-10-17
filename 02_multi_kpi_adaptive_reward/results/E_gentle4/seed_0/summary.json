@@ -1,0 +1,32 @@
+{
+  "method": "E_gentle4",
+  "label": "Ensemble of M41_bc_grid_big_gentle [42, 100], M42_bc_grid2_big_gentle [42, 100]",
+  "seed": 0,
+  "kpis": {
+    "cost": 4440.015034347097,
+    "carbon": 4516.99210962536,
+    "ramping": 9068.588905159995,
+    "daily_peak": 5.381732212781271,
+    "annual_peak": 10.288021564483643,
+    "one_minus_load_factor": 0.7686666269200999,
+    "electricity_consumption": 28774.366143492527,
+    "zero_net_energy": 18130.314627851603,
+    "carbon_per_kwh_imported": 0.15697972588170814,
+    "battery_cycles": 376.62814430118453,
+    "self_consumption": 0.7454049985397119
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.9086400492767186,
+    "carbon": 0.8276932095871132,
+    "ramping": 0.526781103149457,
+    "daily_peak": 0.5683697071617408,
+    "annual_peak": 0.5848102842043845,
+    "one_minus_load_factor": 0.8950174579851884,
+    "electricity_consumption": 0.7925314222643085,
+    "zero_net_energy": 1.0040091808486673,
+    "carbon_per_kwh_imported": 1.044366426787654,
+    "battery_cycles": 1.1319026904021785,
+    "self_consumption": 1.6984574639842753,
+    "score": 0.7185519685607672
+  }
+}

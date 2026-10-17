@@ -1,0 +1,59 @@
+{
+  "method": "M26_sac_score_aligned",
+  "label": "SAC score-aligned (official terms, no-battery scale, C+G+D/2)",
+  "seed": 100,
+  "env_steps_trained": 200000,
+  "kpis": {
+    "cost": 4061.670498438767,
+    "carbon": 5178.483469483588,
+    "ramping": 16342.711469527396,
+    "daily_peak": 7.1209218420537885,
+    "annual_peak": 15.295783281326294,
+    "one_minus_load_factor": 0.845676531086475,
+    "electricity_consumption": 32693.997087149448,
+    "zero_net_energy": 17335.257724882893,
+    "carbon_per_kwh_imported": 0.15839248580342655,
+    "battery_cycles": 284.153041146358,
+    "self_consumption": 0.6650107557938024
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.8312126092586299,
+    "carbon": 0.9489048241897812,
+    "ramping": 0.9493242737546982,
+    "daily_peak": 0.752047129449815,
+    "annual_peak": 0.8694705111001642,
+    "one_minus_load_factor": 0.9846859908091541,
+    "electricity_consumption": 0.9004896886961877,
+    "zero_net_energy": 0.9599810188303735,
+    "carbon_per_kwh_imported": 1.0537653413485426,
+    "battery_cycles": 0.8539818296274678,
+    "self_consumption": 1.5152735546723513,
+    "score": 0.8892742230937071
+  },
+  "mu_final": {
+    "carbon": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ramp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "peak": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

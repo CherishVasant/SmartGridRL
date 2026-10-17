@@ -1,0 +1,59 @@
+{
+  "method": "M52_bc_deep_members",
+  "label": "Deep clone + gentle DAgger (as M51), extra seeds for ensembles",
+  "seed": 3,
+  "env_steps_trained": 1000,
+  "kpis": {
+    "cost": 4408.130883935777,
+    "carbon": 5031.986845329406,
+    "ramping": 7856.056885826234,
+    "daily_peak": 5.325200756003359,
+    "annual_peak": 10.079099178314209,
+    "one_minus_load_factor": 0.767893070511311,
+    "electricity_consumption": 32063.37327316536,
+    "zero_net_energy": 18076.079925135175,
+    "carbon_per_kwh_imported": 0.1569387850261158,
+    "battery_cycles": 398.85469191482446,
+    "self_consumption": 0.6904502857534258
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.9021150227223551,
+    "carbon": 0.9220607965499124,
+    "ramping": 0.4563468865994889,
+    "daily_peak": 0.5623993678241611,
+    "annual_peak": 0.5729343409759805,
+    "one_minus_load_factor": 0.8941167469794608,
+    "electricity_consumption": 0.8831204376858199,
+    "zero_net_energy": 1.0010058055313829,
+    "carbon_per_kwh_imported": 1.044094052410489,
+    "battery_cycles": 1.1987014398395344,
+    "self_consumption": 1.5732393043316917,
+    "score": 0.7183288602752264
+  },
+  "mu_final": {
+    "carbon": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ramp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "peak": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

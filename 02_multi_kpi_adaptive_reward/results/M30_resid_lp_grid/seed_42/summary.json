@@ -1,0 +1,59 @@
+{
+  "method": "M30_resid_lp_grid",
+  "label": "Residual SAC on grid LP plan (score reward)",
+  "seed": 42,
+  "env_steps_trained": 200000,
+  "kpis": {
+    "cost": 4604.869352129747,
+    "carbon": 4942.462104769782,
+    "ramping": 14028.127929966233,
+    "daily_peak": 6.523049885205907,
+    "annual_peak": 13.684970378875732,
+    "one_minus_load_factor": 0.8252959580070701,
+    "electricity_consumption": 31239.9739228858,
+    "zero_net_energy": 17955.008313311693,
+    "carbon_per_kwh_imported": 0.15820954642823917,
+    "battery_cycles": 362.96228718214695,
+    "self_consumption": 0.6990643216462082
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.9423771502267686,
+    "carbon": 0.9056562915047631,
+    "ramping": 0.8148734917143039,
+    "daily_peak": 0.6889053201589672,
+    "annual_peak": 0.7779057777471308,
+    "one_minus_load_factor": 0.9609553277739988,
+    "electricity_consumption": 0.8604415764065021,
+    "zero_net_energy": 0.9943011778232576,
+    "carbon_per_kwh_imported": 1.0525482686309664,
+    "battery_cycles": 1.0908318870813292,
+    "self_consumption": 1.592866988055019,
+    "score": 0.8484455598543219
+  },
+  "mu_final": {
+    "carbon": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ramp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "peak": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

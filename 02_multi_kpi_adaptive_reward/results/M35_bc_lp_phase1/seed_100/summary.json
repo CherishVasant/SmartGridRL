@@ -1,0 +1,59 @@
+{
+  "method": "M35_bc_lp_phase1",
+  "label": "Behaviour clone of Phase I LP plan",
+  "seed": 100,
+  "env_steps_trained": 1000,
+  "kpis": {
+    "cost": 4075.0990332323845,
+    "carbon": 4763.686043590471,
+    "ramping": 21845.486694348205,
+    "daily_peak": 14.632296619861336,
+    "annual_peak": 33.87509250640869,
+    "one_minus_load_factor": 0.9299001560661528,
+    "electricity_consumption": 31657.4582137828,
+    "zero_net_energy": 18085.534608977778,
+    "carbon_per_kwh_imported": 0.1504759482401051,
+    "battery_cycles": 371.70002019084853,
+    "self_consumption": 0.6586620056639395
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.8339607316010537,
+    "carbon": 0.8728973828585581,
+    "ramping": 1.2689724608795137,
+    "daily_peak": 1.5453303538929402,
+    "annual_peak": 1.9255891282841588,
+    "one_minus_load_factor": 1.0827540115760355,
+    "electricity_consumption": 0.8719403325281008,
+    "zero_net_energy": 1.001529381077359,
+    "carbon_per_kwh_imported": 1.0010976098876887,
+    "battery_cycles": 1.1170919094673781,
+    "self_consumption": 1.5008074831190863,
+    "score": 1.25491734484871
+  },
+  "mu_final": {
+    "carbon": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ramp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "peak": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

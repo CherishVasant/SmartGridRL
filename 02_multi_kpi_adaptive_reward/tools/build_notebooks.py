@@ -160,7 +160,93 @@ METHOD_DOCS = {
                                   'As M30 with the carbon weight doubled in the reward, to push carbon further below the plan.'),
     'M32_resid_lp_grid_full': ('M32: Residual SAC around the grid-aware LP plan, full-range correction',
                                'As M30 but the SAC correction can use the full action range (scale 1.0 instead of 0.25).'),
+    'M33_bc_lp_grid': ('M33: Behaviour clone of the grid-aware LP plan',
+                       'The SAC actor is fitted by supervised learning to the perfect-foresight LP plan\'s actions '
+                       '(results/O2_lp_oracle_grid) on the observations along that plan\'s trajectory. Unlike the residual '
+                       'methods it needs only the current observation, not the plan, so it is a real controller. No RL '
+                       'update (1,000 env steps, SAC learning starts after 1,000).'),
+    'M34_bc_lp_grid_sac': ('M34: Behaviour clone of the grid-aware LP plan + SAC fine-tuning',
+                           'M33\'s cloned actor as the starting point of SAC with the challenge-score-aligned reward (M26), '
+                           'with a lower initial entropy weight (0.05) so exploration does not wash out the clone.'),
+    'M35_bc_lp_phase1': ('M35: Behaviour clone of the Phase I LP plan',
+                         'As M33, cloning the Phase I plan (results/O3_lp_phase1_eff087).'),
+    'M36_bc_lp_phase1_sac': ('M36: Behaviour clone of the Phase I LP plan + SAC fine-tuning',
+                             'As M34, from the Phase I clone, with the Phase I-aligned reward (M28).'),
+    'M37_bc_grid_big_dagger': ('M37: Clone of the grid LP plan with a 256x256 network and DAgger',
+                               'As M33 with a bigger actor (256x256) and 3 DAgger iterations: the clone is rolled out, every '
+                               'state it visits is labelled with the action that moves each battery to the plan\'s state of '
+                               'charge for that hour, and the actor is refitted on all data so it learns to recover from its '
+                               'own drift.'),
+    'M38_bc_grid_big': ('M38: Clone of the grid LP plan with a 256x256 network',
+                        'As M33 with a bigger actor only (isolates the network size; compare M37).'),
+    'M39_bc_grid_dagger': ('M39: Clone of the grid LP plan with DAgger',
+                           'As M33 with 3 DAgger iterations only (isolates DAgger; compare M37).'),
+    'M40_bc_grid2_big_dagger': ('M40: Clone of a smoother LP plan, 256x256 + DAgger',
+                                'As M37, cloning a plan with twice the grid weight (results/O8_lp_grid2; tools/lp_oracle.py '
+                                '2 O8_lp_grid2), since the smoother plan O2 cloned better than the Phase I plan O3.'),
+    'M41_bc_grid_big_gentle': ('M41: Big clone of the grid LP plan with gentle DAgger',
+                               'As M37, but the DAgger expert is the plan\'s action for that hour plus 30% of the state-of-'
+                               'charge error per hour (bc_dagger_gain 0.3) instead of a one-hour catch-up, which made the '
+                               'Round 8 clones jumpy (worse ramping and peaks).'),
+    'M42_bc_grid2_big_gentle': ('M42: Big clone of the smoother LP plan with gentle DAgger',
+                                'As M41, cloning the smoother plan O8 (grid weight 2).'),
+    'M43_bc_grid_big_sac_c2': ('M43: Big clone of the grid LP plan + SAC fine-tuning (score reward, carbon 2)',
+                               'The 256x256 clone of O2 (as M38) as the start of SAC with the best RL reward so far (M27: '
+                               'challenge-score-aligned, carbon weight 2), initial entropy weight 0.05.'),
+    'M44_bc_grid2_big_sac_c2': ('M44: Big clone of the smoother LP plan + SAC fine-tuning (score reward, carbon 2)',
+                                'As M43, starting from the clone of the smoother plan O8.'),
+    'M45_bc_grid_gentle': ('M45: Clone of the grid LP plan (64x64) with gentle DAgger',
+                           'As M41 with the default 64x64 actor: the 256x256 clone alone (M38) did worse than the 64x64 one '
+                           '(M33) in closed loop despite fitting the plan 10x more closely.'),
+    'M46_bc_grid_sac_c2': ('M46: Clone of the grid LP plan (64x64) + SAC fine-tuning (score reward, carbon 2)',
+                           'As M43 with the default 64x64 actor (the M33 clone as the starting point).'),
+    'M47_bc_grid_members': ('M47: Extra seeds of the M33 clone, as ensemble members',
+                            'Identical to M33 (clone of the grid LP plan), trained on seeds 1-7. The 3-seed ensemble of M33 '
+                            'beat every single seed, so these are extra members for tools/ensemble_eval.py '
+                            '(e.g. `python tools/ensemble_eval.py E10_M33 M33_bc_lp_grid M47_bc_grid_members:1,2,3,4,5,6,7`).'),
+    'M48_bc_big_gentle_members': ('M48: Extra seeds of the M41 clone, as ensemble members',
+                                  'Identical to M41 (256x256 clone of the grid LP plan + gentle DAgger, the best single model '
+                                  'in Round 9), trained on seeds 1-5 as members for tools/ensemble_eval.py.'),
+    'M49_bc_big_gentle_dagger6': ('M49: M41 with 6 DAgger iterations',
+                                  'As M41 with 6 gentle-DAgger iterations instead of 3: does more recovery data help further?'),
+    'M50_bc_big_gentle_gain05': ('M50: M41 with DAgger gain 0.5',
+                                 'As M41 with the expert correcting 50% of the state-of-charge error per hour instead of 30%.'),
+    'M51_bc_deep_gentle': ('M51: Deep clone (3 x 256) + gentle DAgger',
+                           'As M41 with a third hidden layer, now that DAgger counters the overfitting that hurt the plain '
+                           'big clone (M38).'),
+    'M52_bc_deep_members': ('M52: Extra seeds of the M51 deep clone, as ensemble members',
+                            'Identical to M51 (3 x 256 clone of the grid LP plan + gentle DAgger, the best single model in '
+                            'Round 11), trained on seeds 1-5 as members for tools/ensemble_eval.py.'),
+    'M53_bc_deeper_gentle': ('M53: Deeper clone (4 x 256) + gentle DAgger', 'As M51 with a fourth hidden layer.'),
+    'M54_bc_wide_gentle': ('M54: Wide deep clone (3 x 512) + gentle DAgger', 'As M51 with 512 units per layer.'),
+    'M55_bc_deep_gentle_o8': ('M55: Deep clone of the smoother LP plan + gentle DAgger',
+                              'As M51, cloning the smoother plan O8 (grid weight 2), which cloned well in M42.'),
+    'M56_bc_deep_dagger6': ('M56: Deep clone + gentle DAgger, 6 iterations', 'As M51 with 6 DAgger iterations instead of 3.'),
+    'M57_bc_deep_o6': ('M57: Deep clone of the LP plan with grid weight 0.5 (O6)',
+                       'As M51, cloning O6 (Phase I 0.648, Score 0.627; tools/lp_oracle.py 0.5 O6_lp_grid05 1 0.87) instead '
+                       'of O2 (Phase I 0.658): a plan closer to the published top-3 Phase I scores.'),
+    'M58_bc_deep_o3': ('M58: Deep clone of the Phase I LP plan (O3)',
+                       'As M51, cloning the Phase I-optimal plan O3 (Phase I 0.629), which the small plain clone (M35) could '
+                       'not follow (0.797).'),
+    'M59_bc_deep_o9': ('M59: Deep clone of the LP plan with grid weight 0.25 (O9)',
+                       'As M51, cloning O9 (tools/lp_oracle.py 0.25 O9_lp_grid025), between O3 and O6.'),
+    'M60_bc_deep_o6_dagger6': ('M60: Deep clone of O6 with 6 DAgger iterations', 'As M57 with 6 DAgger iterations.'),
+    'M61_bc_4x512': ('M61: Clone 4 x 512 + gentle DAgger', 'As M54 (3 x 512, the best single model in Round 12) with a fourth layer.'),
+    'M62_bc_3x1024': ('M62: Clone 3 x 1024 + gentle DAgger', 'As M54 with 1024 units per layer.'),
+    'M63_bc_3x512_dagger6': ('M63: Clone 3 x 512 + gentle DAgger, 6 iterations',
+                             'As M54 with 6 DAgger iterations (6 beat 3 for the 2 x 256 clone, M49 vs M41).'),
+    'M64_bc_3x512_o9': ('M64: Clone 3 x 512 of the LP plan O9',
+                        'As M54, cloning O9 (grid weight 0.25; Phase I 0.639, Score 0.633) instead of O2 (0.658 / 0.624).'),
+    'M65_bc_3x512_o3': ('M65: Clone 3 x 512 of the Phase I LP plan O3',
+                        'As M54, cloning the Phase I-optimal plan O3 (Phase I 0.629): the 3 x 256 clone of O3 (M58) reached '
+                        'Phase I 0.658, close to the published #3 (0.651).'),
+    'M66_bc_4x512_o3': ('M66: Clone 4 x 512 of the Phase I LP plan O3', 'As M65 with a fourth layer.'),
+    'M67_bc_3x512_o3_dagger6': ('M67: Clone 3 x 512 of the Phase I LP plan O3, 6 DAgger iterations',
+                                'As M65 with 6 DAgger iterations.'),
 }
+SEEDS_OVERRIDE = {'M47_bc_grid_members': '[1, 2, 3, 4, 5, 6, 7]   # ensemble members (see the description)',
+                  'M48_bc_big_gentle_members': '[1, 2, 3, 4, 5]   # ensemble members (see the description)',
+                  'M52_bc_deep_members': '[1, 2, 3, 4, 5]   # ensemble members (see the description)'}
 
 for method, (title, desc) in METHOD_DOCS.items():
     cells = [
@@ -172,7 +258,8 @@ for method, (title, desc) in METHOD_DOCS.items():
             "- To add seeds later, append them to `SEEDS` below and Run All again."),
         new_code_cell(
             f"METHOD = '{method}'\n"
-            "SEEDS = [42, 100, 2026]   # Stage B: add 7, 1234 here and Run All again"),
+            + (f"SEEDS = {SEEDS_OVERRIDE[method]}" if method in SEEDS_OVERRIDE
+               else "SEEDS = [42, 100, 2026]   # Stage B: add 7, 1234 here and Run All again")),
         new_code_cell("%run ./00_core.ipynb"),
         new_code_cell(
             "print(METHODS[METHOD])\n"

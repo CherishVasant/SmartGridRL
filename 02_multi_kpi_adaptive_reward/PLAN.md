@@ -151,6 +151,186 @@ gain over no battery (counterfactual); full-day peak. Checked: over a year of RB
 | M27 | 1, 2, 0.5, 0.5 | Challenge score with extra carbon emphasis |
 | M28 | 1, 1, 0.2, 0.2 | Phase I score mean(C, G), light grid penalty |
 
+## Perfect-foresight LP plans (`tools/lp_oracle.py`, `results/O*`)
+
+The Phase I leaderboard scored on the 5 training buildings, so top entries could plan with the year known (Together used
+dynamic programming + CMA-ES). An LP over the whole year (official district-level objective; battery 6.4 kWh, 5 kW,
+power taper above 80% SoC) is solved with HiGHS in ~30 s, then replayed in CityLearn by tracking its planned SoC.
+
+| Plan | Objective | Phase I mean(C, G) | C | G | D | mean(C, G, D) |
+|---|---|---|---|---|---|---|
+| O3 | C + G, efficiency 0.87 | **0.629** (published #1: 0.631) | 0.566 | **0.692** | 1.096 | 0.785 |
+| O1 | C + G, efficiency 0.90 | 0.631 | 0.569 | 0.692 | 1.113 | 0.792 |
+| O2 | C + G + (R + P), efficiency 0.90 | 0.658 | 0.595 | 0.721 | **0.555** | **0.624** |
+| O6 | C + G + 0.5 (R + P) | 0.648 | 0.584 | 0.713 | 0.583 | 0.627 |
+
+Bug fixed on the way: after `step()` CityLearn stores the new SoC at `soc[time_step]`; reading `time_step - 1` made the
+replay lag one hour (0.792 instead of 0.631).
+
+**Round 3, seed 100 (13:20):** M20 is consistent (Phase I 0.826 / 0.830, G 0.874 / 0.881 on seeds 42 / 100) and the
+best RL method; M19's seed-42 lead did not hold (0.871 → 0.898).
+
+**Carbon floor:** a carbon-focused plan (O7, carbon weight 10) reaches G = 0.691, the same as O3 (0.692) and the
+published leader Together (0.691). Cost and carbon are almost perfectly aligned at the optimum here, so ~0.69 is the
+floor for these batteries; the goal is reaching it without knowing the future.
+
+**Collapse (Round 4):** M21 (counterfactual + full-day peak + carbon 2) and M24 (counterfactual + full-day peak) never
+used the battery (training cost/carbon flat at the no-battery 5,636 / 4,640 for 140k–200k steps; M21 eval: all actions
+"discharge", SoC 0, every KPI exactly 1.000). With RBC scaling and peak weight 1, any charging that sets a new daily peak
+is expensive, so "do nothing" (reward 0) is a trap. M26/M27 (same counterfactual + full-day peak, but no-battery scaling
+and peak weight 0.5) learn normally. M21/M24 stopped after seed 42; M22, M23, M25 (same family) dropped.
+
+## Round 6 (fusion: residual SAC around an LP plan; queued 2026-10-17 12:55)
+
+Action = plan's action for that hour + scaled SAC correction (`residual_base`, `residual_scale`); checked that a zero
+correction reproduces the plan's year exactly (max load difference 2e-7).
+
+| ID | Base plan | Reward | Correction |
+|---|---|---|---|
+| M29 | O3 (Phase I) | M28 Phase I-aligned | ±25% |
+| M30 | O2 (grid) | M26 score-aligned | ±25% |
+| M31 | O2 | M27 score-aligned, carbon 2 | ±25% |
+| M32 | O2 | M26 | full range |
+
+**Round 6 result: residual SAC around the plan makes it worse** (seed 42; plan alone in brackets):
+M29 Phase I 0.791 (O3: 0.629), M30 0.756 / mean(C, G, D) 0.820 (O2: 0.658 / 0.624), M31 0.759 / 0.818, M32 0.802 / 0.886.
+SAC's deterministic correction drifts well away from 0 and adds noise to a near-optimal schedule (D rises from 0.555 to
+0.94–1.26). Branch closed after seed 42 (M29–M32 stopped). Imitating the plan (Round 7) keeps far more of its value.
+
+## Round 7 (behaviour cloning of the LP plans; queued 2026-10-17 14:00)
+
+The SAC actor is fitted (supervised, 300 epochs) to the plan's actions on the observations along the plan's trajectory
+(`bc_from`). Unlike the residual methods it needs only the current observation, not the plan, so it is a deployable
+controller. With VecNormalize (observations only), the normalisation statistics come from the same data.
+
+| ID | Clone of | Then |
+|---|---|---|
+| M33 | O2 (grid plan) | nothing (1,000 env steps, no SAC update) |
+| M35 | O3 (Phase I plan) | nothing |
+| M34 | O2 | SAC fine-tuning, score reward (M26), initial entropy weight 0.05 |
+| M36 | O3 | SAC fine-tuning, Phase I reward (M28), initial entropy weight 0.05 |
+
+**Results (official KPIs vs no battery):**
+
+| Method | Seeds | Phase I mean(C, G) | mean(C, G, D) | C | G | D |
+|---|---|---|---|---|---|---|
+| **M33 clone of O2** | 3 | **0.750 ± 0.003** | **0.806** | 0.688 | **0.811** | 0.917 |
+| M35 clone of O3 | 3 | ~0.80 | ~0.95 | ~0.74 | ~0.87 | ~1.24 |
+| M26 score-aligned SAC (Round 5) | 1 | 0.790 | 0.869 | 0.736 | 0.845 | 1.027 |
+| M20 best earlier RL | 2 | 0.828 | 0.922 | 0.778 | 0.878 | 1.108 |
+
+- **M33 is the best controller that does not know the future**, very stable across seeds; ~10th on the published Phase I
+  leaderboard (between ludwigbald 0.752 and the leaders' 0.631).
+- **Cloning the smooth grid plan beats cloning the Phase I plan, even on the Phase I score**: a smoother target is easier
+  to imitate from observations alone.
+- The score-aligned reward (M26) is the best pure-RL reward so far.
+
+## Round 8 (better imitation of the smooth plan; queued 2026-10-17 14:45)
+
+DAgger (`bc_dagger_iters`): roll the clone out, label each visited state with the action that moves every battery to the
+plan's SoC for that hour, aggregate, refit; lets the clone learn to recover from its own drift. New plan O8 (grid weight 2;
+C 0.614, G 0.733, D 0.534, mean(C, G, D) 0.627) is even smoother.
+
+| ID | Clone of | Network | DAgger |
+|---|---|---|---|
+| M37 | O2 | 256×256 | 3 iterations |
+| M38 | O2 | 256×256 | – |
+| M39 | O2 | 64×64 | 3 iterations |
+| M40 | O8 | 256×256 | 3 iterations |
+
+**Seed 42:** the 256×256 clones fit the plan almost exactly on its own trajectory (MSE 0.002 vs 0.024), but DAgger with a
+one-hour catch-up expert hurt the grid KPI: M37 0.762 / 0.878 (Phase I / mean C, G, D), M40 0.758 / 0.858, M39 0.796 /
+0.957, all worse than plain M33 (0.753 / 0.806). The catch-up labels are large, spiky corrections. Also M27 (score-aligned,
+carbon 2) seed 42: 0.767 / 0.864, G 0.817, the best pure RL so far.
+
+**Bigger clone alone (M38) is worse** (seed 42: 0.775 / 0.838 vs M33 0.753 / 0.806) despite a 10× lower fit error: it
+overfits the plan's own trajectory and recovers worse from drift. Small actors generalise better in closed loop.
+
+## Round 10: ensembles of clones (`tools/ensemble_eval.py`, 2026-10-17 15:45)
+
+Each hour's action = mean of the members' deterministic actions (each with its own VecNormalize statistics). No training.
+
+| Ensemble | Phase I mean(C, G) | mean(C, G, D) | C | G | D |
+|---|---|---|---|---|---|
+| **E_M33: M33 seeds 42, 100, 2026** | **0.734** | **0.788** | 0.673 | **0.796** | 0.895 |
+| (M33 single seeds) | 0.747–0.753 | 0.805–0.807 | 0.686–0.691 | 0.807–0.814 | 0.912–0.921 |
+
+| E_M33_M38: M33 + M38 (6 members) | 0.716 | 0.758 | 0.650 | 0.781 | 0.844 |
+| **E_clones_mix: M33 ×3, M38 ×3, M37 ×2, M40 ×2** | **0.701** | **0.731** | **0.640** | **0.762** | **0.792** |
+
+Ensembles beat every member on every KPI, and diversity helps even with weaker members (M37/M40 alone are worse).
+E_clones_mix is ~6th on the published Phase I leaderboard (OneWo 0.698, LA_gang 0.719); its mean(C, G, D) 0.731 is level
+with the Phase III public winner Together's 0.728 (different buildings).
+
+**Best single models (seed 42), Round 9:** gentle DAgger fixes the big clone's overfitting —
+M41 (256×256 + gentle DAgger, O2) Phase I **0.720**, mean(C, G, D) 0.751, G 0.775; M42 (same, O8) 0.722 / **0.741**, G 0.775,
+D 0.780; M45 (64×64 + gentle DAgger) 0.742 / 0.805. Hard DAgger was worse (M39 0.796).
+
+## Round 11 (double down on M41; queued 2026-10-17 16:09)
+
+| ID | Change vs M41 |
+|---|---|
+| M48 | none, seeds 1–5 (ensemble members) |
+| M49 | 6 DAgger iterations |
+| M50 | DAgger gain 0.5 |
+| M51 | 3 × 256 network |
+
+**Results (seed 42 unless noted):** M51 (3×256 + gentle DAgger) Phase I **0.685**, mean(C, G, D) **0.687**, C 0.626,
+**G 0.745**, D 0.691 — the best single deployable model, past the 5th published Phase I entry (OneWo 0.698).
+M41 is stable (seeds 42 / 100: 0.720 / 0.719); M48 seed 1 0.717; M50 (gain 0.5) 0.723 / 0.766 (worse D than gain 0.3).
+Ensembles of plain/hard-DAgger clones plateau at ~0.701 (15 members 0.701, 21 members with the weak M35/M39 0.704).
+
+## Round 12 (double down on M51; queued 2026-10-17 16:46)
+
+| ID | Change vs M51 |
+|---|---|
+| M52 | none, seeds 1–5 (ensemble members) |
+| M53 | 4 × 256 |
+| M54 | 3 × 512 |
+| M55 | clone of O8 (smoother plan) |
+| M56 | 6 DAgger iterations |
+
+**Results so far:** M51 is robust (seeds 42 / 100: 0.685 / 0.688; M52 seed 1: 0.688). **M53 (4×256) seed 42: Phase I
+0.681, Score 0.672, G 0.738, D 0.654: the best single model.** M55 (deep clone of the smoother O8): 0.695 / 0.687, so a
+smoother plan gives a worse Phase I. M49 (2×256, 6 DAgger iterations): 0.703 / 0.713 vs M41's 0.720 / 0.751, so more DAgger
+helps.
+
+**Clone + SAC fine-tuning makes the clone worse** (M34 seed 42: 0.789 / 0.878 vs its starting clone M33's 0.753 / 0.806),
+the same lesson as Round 6. Branch cut: M34, M36, M43, M44, M46 stopped after seed 42.
+
+## Round 13 (deep clones of plans with a better Phase I score; queued 2026-10-17 17:26)
+
+The deep clone (~0.687) is already close to its plan O2 (0.658), which gives up cost and carbon for smoothness. Target the
+published top 3 (≤ 0.651) by cloning less smooth plans.
+
+| ID | Clone of (plan Phase I / Score) | DAgger |
+|---|---|---|
+| M57 | O6, grid weight 0.5 (0.648 / 0.627) | 3 |
+| M58 | O3, Phase I plan (0.629 / 0.785) | 3 |
+| M59 | O9, grid weight 0.25 (solving) | 3 |
+| M60 | O6 | 6 |
+
+**Seed 42:** M58 (deep clone of O3) Phase I **0.658** (published #3: 0.651), carbon **G 0.717** (published #1: 0.718),
+but Score 0.815 (D 1.128: the Phase I plan is not smooth). M57 (O6) 0.682 / 0.698. M54 (3×512 clone of O2) **0.671 /
+0.652**, G 0.731, D 0.614: the best on the full score. Two families: clone O3 for Phase I, clone O2/O9 for the full score.
+
+## Round 14 (bigger networks, more DAgger; started 2026-10-17 18:10)
+
+M61 4×512 (O2), M62 3×1024 (O2), M63 3×512 + 6 DAgger iterations (O2), M64 3×512 on O9.
+
+## Round 15 (big clones of the Phase I plan O3, aimed at the published top 3; queued 18:12)
+
+M65 3×512 (O3), M66 4×512 (O3), M67 3×512 + 6 DAgger iterations (O3).
+
+## Round 9 (queued 2026-10-17 15:10)
+
+| ID | Method |
+|---|---|
+| M41 | big clone of O2 + gentle DAgger (plan action + 30% of the SoC error per hour, `bc_dagger_gain` 0.3) |
+| M42 | big clone of O8 + gentle DAgger |
+| M43 | big clone of O2 + SAC fine-tuning with the M27 reward (score-aligned, carbon 2), entropy 0.05 |
+| M44 | big clone of O8 + SAC fine-tuning with the M27 reward |
+
 ## Multi-KPI reward
 
 Every term is divided by its RBC per-step average:

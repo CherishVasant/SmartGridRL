@@ -1,0 +1,59 @@
+{
+  "method": "M34_bc_lp_grid_sac",
+  "label": "Behaviour clone of grid LP plan + SAC fine-tuning (score reward)",
+  "seed": 42,
+  "env_steps_trained": 200000,
+  "kpis": {
+    "cost": 4396.4079468298005,
+    "carbon": 5070.88190044988,
+    "ramping": 16947.155932152134,
+    "daily_peak": 6.906636136782994,
+    "annual_peak": 14.1339693069458,
+    "one_minus_load_factor": 0.8400352361512793,
+    "electricity_consumption": 31944.83165261389,
+    "zero_net_energy": 17311.39519823915,
+    "carbon_per_kwh_imported": 0.15873872667708844,
+    "battery_cycles": 274.83596066092286,
+    "self_consumption": 0.6621687720171452
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.8997159474788613,
+    "carbon": 0.929187922794196,
+    "ramping": 0.9844355710186933,
+    "daily_peak": 0.7294162182973691,
+    "annual_peak": 0.8034285849347244,
+    "one_minus_load_factor": 0.9781173988138515,
+    "electricity_consumption": 0.8798554497217178,
+    "zero_net_energy": 0.9586595748113184,
+    "carbon_per_kwh_imported": 1.056068838453045,
+    "battery_cycles": 0.8259806602307268,
+    "self_consumption": 1.508797895711864,
+    "score": 0.8873836072229492
+  },
+  "mu_final": {
+    "carbon": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ramp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "peak": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

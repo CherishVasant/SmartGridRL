@@ -1,0 +1,59 @@
+{
+  "method": "M45_bc_grid_gentle",
+  "label": "Clone of grid LP plan + gentle DAgger",
+  "seed": 42,
+  "env_steps_trained": 1000,
+  "kpis": {
+    "cost": 4425.562623194383,
+    "carbon": 4491.916569505967,
+    "ramping": 13733.528939971206,
+    "daily_peak": 6.44010501975388,
+    "annual_peak": 13.925049304962158,
+    "one_minus_load_factor": 0.8160410895740312,
+    "electricity_consumption": 28743.220166311658,
+    "zero_net_energy": 18137.2651055202,
+    "carbon_per_kwh_imported": 0.15627742972134678,
+    "battery_cycles": 364.4398136310876,
+    "self_consumption": 0.7312286072084834
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.905682392719166,
+    "carbon": 0.8230983699726442,
+    "ramping": 0.7977606660520893,
+    "daily_peak": 0.680145436347659,
+    "annual_peak": 0.7915527772325107,
+    "one_minus_load_factor": 0.9501791752407279,
+    "electricity_consumption": 0.7916735696370822,
+    "zero_net_energy": 1.0043940800373352,
+    "carbon_per_kwh_imported": 1.039694138519703,
+    "battery_cycles": 1.0952723841286205,
+    "self_consumption": 1.6661555640559718,
+    "score": 0.8247364695941327
+  },
+  "mu_final": {
+    "carbon": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ramp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "peak": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}

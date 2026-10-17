@@ -1,0 +1,59 @@
+{
+  "method": "M47_bc_grid_members",
+  "label": "Clone of grid LP plan (as M33), extra seeds for ensembles",
+  "seed": 3,
+  "env_steps_trained": 1000,
+  "kpis": {
+    "cost": 4437.998901953208,
+    "carbon": 4546.985386018529,
+    "ramping": 12803.0183490714,
+    "daily_peak": 6.654191354330588,
+    "annual_peak": 15.410803034901619,
+    "one_minus_load_factor": 0.835271900734586,
+    "electricity_consumption": 28851.901650137836,
+    "zero_net_energy": 18145.685810976764,
+    "carbon_per_kwh_imported": 0.15759742429306411,
+    "battery_cycles": 365.5276277312845,
+    "self_consumption": 0.7430187030485619
+  },
+  "ratios_vs_rbc": {
+    "cost": 0.9082274518815386,
+    "carbon": 0.83318917473414,
+    "ramping": 0.7437086629573693,
+    "daily_peak": 0.7027552917770524,
+    "annual_peak": 0.8760086714603365,
+    "one_minus_load_factor": 0.972571082365508,
+    "electricity_consumption": 0.794666980178987,
+    "zero_net_energy": 1.0048603965774037,
+    "carbon_per_kwh_imported": 1.0484758968423182,
+    "battery_cycles": 1.0985416557571521,
+    "self_consumption": 1.6930201226783332,
+    "score": 0.8394100558626576
+  },
+  "mu_final": {
+    "carbon": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "ramp": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "peak": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ]
+  }
+}
