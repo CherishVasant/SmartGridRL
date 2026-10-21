@@ -7,6 +7,10 @@
 \usepackage{multirow}
 \usepackage{url}
 \usepackage[hidelinks]{hyperref}
+\usepackage{pifont}
+\usepackage{array}
+\newcommand{\fullstar}{\ding{72}}
+\newcommand{\emptystar}{\ding{73}}
 
 \graphicspath{{figures/}}
 
@@ -551,6 +555,36 @@ $\le 0.008$ for the best controllers), but at 60{,}000 steps the spread grows to
 short budgets can mislead: the history features looked best with SAC on one seed, gave no reliable gain over three
 seeds, and only helped once combined with TQC at the full budget. Larger studies should use more seeds
 \cite{agarwal2021precipice}.
+
+\section{Relevance to the Sustainable Development Goals}\label{sec:sdg}
+Battery control in grid-interactive buildings addresses several of the United Nations Sustainable Development Goals
+(SDGs). Table~\ref{tab:sdg} lists the goals this work contributes to, ordered by relevance.
+
+\begin{table}[!t]
+\centering
+\caption{United Nations Sustainable Development Goals addressed by this work.}
+\label{tab:sdg}
+\footnotesize
+\renewcommand{\arraystretch}{1.25}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.0cm}c>{\raggedright\arraybackslash}p{4.3cm}@{}}
+\toprule
+SDG & Relevance & Justification \\
+\midrule
+\textbf{SDG 13 -- Climate Action} & \fullstar\fullstar\fullstar\fullstar\fullstar &
+Dynamic carbon-aware reward shaping minimises CO$_2$ emissions by adapting battery dispatch to real-time grid carbon
+intensity. \\
+\textbf{SDG 7 -- Affordable and Clean Energy} & \fullstar\fullstar\fullstar\fullstar\fullstar &
+Optimises battery storage and rooftop solar utilisation, improving energy efficiency and supporting renewable energy
+integration. \\
+\textbf{SDG 11 -- Sustainable Cities and Communities} & \fullstar\fullstar\fullstar\fullstar\emptystar &
+Coordinates energy management across multiple residential buildings within the CityLearn smart-city environment. \\
+\textbf{SDG 9 -- Industry, Innovation and Infrastructure} & \fullstar\fullstar\fullstar\emptystar\emptystar &
+Demonstrates an AI-based control framework for intelligent energy infrastructure. \\
+\textbf{SDG 12 -- Responsible Consumption and Production} & \fullstar\fullstar\emptystar\emptystar\emptystar &
+Encourages efficient electricity consumption and demand shifting toward lower-carbon periods. \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \section{Conclusion}\label{sec:conclusion}
 We studied 52 genuinely deployable deep RL controllers for community battery storage on the CityLearn 2022 benchmark. A
