@@ -1,0 +1,570 @@
+\documentclass[journal]{IEEEtran}
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+
+\graphicspath{{figures/}}
+
+\begin{document}
+
+\title{Score-Aligned Reward Design for Deployable Deep Reinforcement Learning Control of Community Battery Storage}
+
+\author{Cherish~Vasant}
+
+\markboth{IEEE Transactions on Smart Grid (manuscript draft)}%
+{Vasant: Score-Aligned Reward Design for Deployable Deep RL Control of Community Battery Storage}
+
+\maketitle
+
+\begin{abstract}
+Batteries in grid-interactive buildings can lower electricity bills and emissions by shifting consumption in time, but a
+controller that runs in a real building never knows future prices, carbon intensity or demand. Model-free deep
+reinforcement learning (RL) is attractive because it learns a control policy from interaction alone, yet its performance
+depends heavily on how the reward encodes the operator's objectives. We present a systematic study of 52 reward,
+algorithm and input designs for district-level battery control on the five-building CityLearn Challenge 2022 benchmark,
+using only genuinely deployable RL: every policy acts on current measurements, past information and the forecasts provided
+by the environment, and is trained from reward alone. The key ingredient is a \emph{score-aligned counterfactual reward}:
+per-step terms computed exactly as the official district-level key performance indicators (KPIs), scaled by their
+no-battery values, weighted like the challenge score with an increased carbon weight, and expressed as the improvement over
+doing nothing in the same hour. With Soft Actor-Critic (SAC) it lowers electricity cost by 28.0\% and carbon emissions by
+18.3\% relative to no battery over three seeds (Phase~I score $0.768 \pm 0.005$), whereas a rule-based controller and a PPO
+cost-only agent are worse than or equal to not using the batteries (1.132 and 1.004). With Truncated Quantile Critics
+(TQC) the same reward gives the best overall challenge score ($0.861 \pm 0.003$), and TQC with features built only from
+past observations gives the best Phase~I score ($0.763 \pm 0.005$; cost $-29.1\%$, emissions $-18.4\%$). These policies,
+unchanged, transfer to five unseen buildings with cost and carbon reductions of 29.1\% and 20.9\%. Ablations show that
+off-policy learning, the counterfactual baseline, KPI-exact terms and carbon weighting each contribute, whereas larger
+networks, CrossQ, multi-step returns and longer training do not help.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Battery energy storage, demand response, deep reinforcement learning, soft actor-critic, reward design, CityLearn,
+carbon-aware control, grid-interactive buildings.
+\end{IEEEkeywords}
+
+\section{Introduction}
+\IEEEPARstart{B}{uildings} account for a large share of electricity demand, and distributed photovoltaic (PV) generation
+and behind-the-meter batteries turn them into flexible grid resources. By charging when electricity is cheap or clean and
+discharging when it is expensive or carbon-intensive, a battery can reduce both the bill of its owner and the emissions
+caused by its consumption, while a coordinated fleet can also smooth the aggregate load seen by the distribution grid
+\cite{vazquez2019review,wang2020rlbuildings}.
+
+Classical control of such systems relies either on hand-crafted rules or on model predictive control with forecasts of
+demand, generation, prices and carbon intensity. Rules are simple but cannot adapt, and optimisation-based control
+requires accurate models and forecasts that are costly to build for every building. Model-free deep reinforcement
+learning (RL) \cite{sutton2018rl} offers an alternative: a policy is learned directly from interaction with the system,
+without an explicit model, and acts in real time on the information available at each step
+\cite{yu2021review,nagy2023tenquestions}. The CityLearn environment \cite{vazquez2019citylearn,nweye2024citylearn} and the
+NeurIPS 2022 CityLearn Challenge \cite{citylearn2022challenge} made this setting a common benchmark, with an official
+score that combines electricity cost, carbon emissions and grid KPIs.
+
+A recurring difficulty is that the quantities an operator cares about are yearly, district-level KPIs, whereas an RL agent
+optimises a per-step scalar reward. Naive choices, such as the negative bill of each building or a weighted sum of terms on
+arbitrary scales, are poorly aligned with the official KPIs: they ignore that exports earn nothing in the official cost,
+that buildings offset each other at district level, and that terms with different magnitudes dominate one another. They
+also produce high-variance learning targets because most of the reward is driven by exogenous demand rather than by the
+battery action. Our experiments show that such misalignment can make learned controllers no better than leaving the
+batteries idle.
+
+This paper studies how far genuinely deployable model-free RL can go on the CityLearn 2022 benchmark when the reward is
+designed carefully. We deliberately restrict ourselves to controllers that could run in a real building: the policy sees
+only current and past measurements and the forecasts that the environment itself provides, and it is trained from reward
+alone, without access to future data or to precomputed optimal schedules. Our contributions are:
+\begin{enumerate}
+  \item A systematic, multi-seed comparison of 52 RL controllers spanning PPO, SAC, TQC and CrossQ, central and decentralised
+        agents, eight reward families (including fixed and adaptive multi-KPI weighting), several network sizes,
+        past-only history features and training lengths.
+  \item A \emph{score-aligned counterfactual reward} whose per-step terms sum to the official KPIs, scaled by the
+        no-battery reference and expressed as the improvement over idling; with SAC it reduces cost by 28.0\% and
+        emissions by 18.3\% relative to no battery; with TQC it gives the best overall score, and with TQC and
+        past-only history features the best cost, carbon and Phase~I score.
+  \item Ablations that isolate the effect of each design choice, and negative results (reward normalisation,
+        decentralised agents, residual learning on a rule-based controller, larger networks, longer training) that
+        are useful to practitioners.
+  \item A generalisation test on five unseen buildings, where the learned policies keep their cost and carbon reductions
+        without retraining.
+\end{enumerate}
+
+The remainder of the paper is organised as follows. Section~\ref{sec:related} surveys related work.
+Section~\ref{sec:problem} formulates the control problem and the KPIs. Section~\ref{sec:method} describes the agents and
+reward designs, Section~\ref{sec:setup} the experimental protocol, and Section~\ref{sec:results} the results.
+Section~\ref{sec:discussion} discusses limitations and Section~\ref{sec:conclusion} concludes.
+
+\section{Related Work}\label{sec:related}
+
+\subsection{Reinforcement Learning for Building Energy and Demand Response}
+V\'azquez-Canteli and Nagy \cite{vazquez2019review} reviewed RL for demand response and found that most studies used
+tabular or simple function approximators, single buildings and bespoke simulators, which made results hard to compare.
+Wang and Hong \cite{wang2020rlbuildings} and Yu \emph{et al.} \cite{yu2021review} surveyed deep RL for building control,
+identifying sample efficiency, safety, reward design and generalisation across buildings as the main open problems.
+Nagy \emph{et al.} \cite{nagy2023tenquestions} discussed ten questions on RL for building energy management, including the
+need for standard benchmarks and KPIs. Early deep RL applications include HVAC control with deep Q-networks
+\cite{wei2017hvac,mnih2015dqn} and on-line building energy optimisation with deep policy-gradient and Q-learning methods
+\cite{mocanu2019online}. Dulac-Arnold \emph{et al.} \cite{dulacarnold2021challenges} formalised the challenges of applying RL
+in the real world, many of which (multi-objective rewards, partial observability, limited data) are central to battery
+control.
+
+\subsection{CityLearn and Grid-Interactive Communities}
+CityLearn \cite{vazquez2019citylearn} is an OpenAI Gym environment for coordinated demand response in districts of
+buildings with storage and PV; CityLearn v2 \cite{nweye2024citylearn} extends it with electric vehicles, occupant comfort,
+resilience and carbon-aware control. MARLISA \cite{vazquez2020marlisa} coordinated multiple agents through iterative
+sequential action selection for load shaping. Nweye \emph{et al.} \cite{nweye2022realworld} analysed real-world
+challenges for multi-agent RL in grid-interactive buildings, and MERLIN \cite{nweye2023merlin} studied offline and transfer
+learning for occupant-centric operation of communities. The NeurIPS 2022 CityLearn Challenge \cite{citylearn2022challenge}
+evaluated controllers on cost, carbon and grid KPIs normalised by the case without batteries; we use its dataset, its
+official KPI definitions and its public leaderboard as reference points.
+
+\subsection{Deep RL Algorithms for Continuous Control}
+Battery set-points are continuous, so actor-critic methods are the natural choice. DDPG \cite{lillicrap2016ddpg} and TD3
+\cite{fujimoto2018td3} learn deterministic policies with off-policy critics, TD3 adding clipped double Q-learning to curb
+over-estimation. Soft Actor-Critic (SAC) \cite{haarnoja2018sac,haarnoja2018sacapps} maximises reward plus policy entropy,
+with automatic temperature tuning, and is among the most robust off-policy methods. Proximal Policy Optimization (PPO)
+\cite{schulman2017ppo} is a widely used on-policy alternative. More recent work improves sample efficiency and value
+estimation: TQC \cite{kuznetsov2020tqc} truncates a mixture of distributional critics, REDQ \cite{chen2021redq} uses an
+ensemble of critics with a high update-to-data ratio, CrossQ \cite{bhatt2024crossq} removes target networks through batch
+normalisation, and multi-step returns \cite{hessel2018rainbow} propagate delayed rewards faster. We use the
+Stable-Baselines3 implementations \cite{raffin2021sb3}.
+
+\subsection{Reward Design and Multi-Objective Weighting}
+Battery control is inherently multi-objective \cite{roijers2013survey}: cost, emissions, ramping and peaks often conflict.
+Scalarising them requires weights and scales; poorly scaled terms let one objective dominate. Ng \emph{et al.}
+\cite{ng1999shaping} showed which reward transformations leave the optimal policy unchanged, a property we exploit with an
+action-independent counterfactual baseline. In multi-task learning, Dynamic Weight Average \cite{liu2019dwa} and
+uncertainty weighting \cite{kendall2018uncertainty} adapt loss weights during training; we adapt the former to KPI weights
+in our adaptive multi-KPI rewards. For storage arbitrage specifically, Cao \emph{et al.} \cite{cao2020arbitrage} showed that
+including an accurate battery degradation model in the reward changes the learned arbitrage strategy, motivating the
+small battery-wear term in our rewards.
+
+\subsection{Evaluation of RL Results}
+Henderson \emph{et al.} \cite{henderson2018matters} and Agarwal \emph{et al.} \cite{agarwal2021precipice} showed that deep RL
+results vary strongly with random seeds and that single-run comparisons are unreliable. We therefore report every result as
+the mean and standard deviation over three independent seeds and evaluate deterministic policies over a full year.
+
+\section{Problem Formulation}\label{sec:problem}
+
+\subsection{Environment}
+We use CityLearn 2.1.2 with the \texttt{citylearn\_challenge\_2022\_phase\_1} dataset: five residential buildings with
+rooftop PV and one battery each, simulated hourly for one year (8{,}759 control steps). Each building has an
+uncontrollable non-shiftable load and PV generation; the controller decides, every hour, the charge or discharge rate of
+each battery as a fraction of its capacity. Electricity is billed with a time-of-use tariff and the grid has a time-varying
+carbon intensity.
+
+\subsection{Observations and Actions}
+A central agent observes 60 values: calendar features (month, day type, hour); outdoor temperature, relative humidity and
+diffuse and direct solar irradiance, each with the environment's 6, 12 and 24-hour forecasts; the current carbon intensity;
+and, for each building, its non-shiftable load, PV generation, battery state of charge (SoC), net electricity consumption,
+and the current electricity price with its 6, 12 and 24-hour values from the tariff. The action is a vector of five
+continuous battery rates. No future demand, generation or carbon intensity beyond these provided forecasts is available to
+the policy, so every controller in this paper can be deployed as is.
+
+\subsection{Key Performance Indicators}
+Let $E_t$ be the district net consumption at hour $t$ (positive for imports), $\pi_t$ the price and $I_t$ the carbon
+intensity, and let a superscript ``nb'' denote the same quantity in the reference run without batteries. The official
+challenge KPIs are
+\begin{align}
+  C &= \frac{\sum_t \max(0, E_t \pi_t)}{\sum_t \max(0, E_t^{\mathrm{nb}} \pi_t)}, \qquad
+  G = \frac{\sum_t \max(0, E_t I_t)}{\sum_t \max(0, E_t^{\mathrm{nb}} I_t)}, \\
+  R &= \frac{\sum_t |E_t - E_{t-1}|}{\sum_t |E_t^{\mathrm{nb}} - E_{t-1}^{\mathrm{nb}}|}, \qquad
+  D = \tfrac{1}{2}\bigl(R + (1-L)\bigr),
+\end{align}
+where $1-L$ is the average monthly $1 - \bar E / \max E$ relative to no battery. Exports earn nothing, and because the
+clipping is applied to the district total, one building's export offsets another's import. All KPIs are ratios to no
+battery, so values below one are improvements. We report the Phase~I score $(C+G)/2$, used for the challenge's Phase~I
+leaderboard on these five buildings, and the score $S=(C+G+D)/3$, the challenge's overall formula.
+
+\section{Methods}\label{sec:method}
+
+\subsection{Agents}
+\emph{Central} agents control all five batteries with one policy. \emph{Decentralised} agents share one policy across
+buildings (parameter sharing): each building observes its own values plus a one-hot building identifier and outputs its own
+action. We train PPO \cite{schulman2017ppo} and SAC \cite{haarnoja2018sac} agents with Stable-Baselines3
+\cite{raffin2021sb3}, and TQC \cite{kuznetsov2020tqc} and CrossQ \cite{bhatt2024crossq} agents with its sb3-contrib
+extension. We also test a residual agent whose action is added to the action of the rule-based controller (RBC)
+supplied with CityLearn, and variants with running normalisation of observations and rewards.
+
+\subsection{Reward Families}
+We compare eight reward families (Table~\ref{tab:main}): (i) the negative cost of each building; (ii) cost plus a static
+carbon weight; (iii) cost plus a carbon weight proportional to the current carbon intensity, or active only in the
+dirtiest 25\% of hours; (iv) a multi-KPI reward
+\begin{equation}
+  r_t = -\bigl(\hat c_t + \mu_g \hat g_t + \mu_r \hat r_t + \mu_p \hat p_t + w_b \hat b_t\bigr),
+\end{equation}
+whose terms are cost, carbon, ramping $|E_t-E_{t-1}|$, the increase of the daily peak, and battery wear
+$\sum_i |\mathrm{SoC}_{i,t}-\mathrm{SoC}_{i,t-1}|$, each divided by its per-step mean under the RBC; (v) the same with
+\emph{adaptive} weights $\mu$, updated once per simulated week in the style of Dynamic Weight Average \cite{liu2019dwa}:
+the weight moves toward the KPI furthest behind its target, with a floor so that no KPI is ignored and a fixed total;
+(vi) cost and carbon plus a squared-load penalty; (vii) a \emph{counterfactual} multi-KPI reward that adds back the same
+weighted terms of the no-battery run in the same hour; and (viii) the \emph{score-aligned} rewards described next.
+
+\subsection{Score-Aligned Counterfactual Reward}
+The proposed reward makes the per-step terms add up exactly to the numerators of the official KPIs and puts them on the
+scale of the KPIs. At hour $t$ we use the district-level clipped cost and emissions,
+\begin{equation}
+\begin{gathered}
+  \hat c_t = \frac{\max(0, E_t\pi_t)}{\bar c^{\,\mathrm{nb}}}, \qquad
+  \hat g_t = \frac{\max(0, E_t I_t)}{\bar g^{\,\mathrm{nb}}}, \\
+  \hat r_t = \frac{|E_t - E_{t-1}|}{\bar r^{\,\mathrm{nb}}},
+\end{gathered}
+\end{equation}
+where a bar denotes the per-step mean of the term in the no-battery run, so that $\sum_t \hat c_t = T\cdot C$: the yearly
+return is a linear function of the official KPIs. The peak term $\hat p_t$ is the increase of the running daily maximum of
+$E_t$, with the first hour of each day counting its full load, so that a day's terms sum to that day's peak (an earlier
+version without this correction let the agent hide a peak in the first hour of the day). The reward is
+\begin{equation}
+  \begin{split}
+  r_t = &-\bigl(\hat c_t + w_g\hat g_t + w_r\hat r_t + w_p\hat p_t + w_b\hat b_t\bigr) \\
+        &+ \bigl(\hat c^{\,\mathrm{nb}}_t + w_g\hat g^{\,\mathrm{nb}}_t + w_r\hat r^{\,\mathrm{nb}}_t + w_p\hat p^{\,\mathrm{nb}}_t\bigr).
+  \end{split}
+  \label{eq:reward}
+\end{equation}
+The second bracket is the value of the same terms had the batteries stayed idle in that hour. It depends only on exogenous
+data, not on the actions or the battery state, so it leaves the optimal policy unchanged
+\cite{ng1999shaping}, but it removes most of the demand-driven variation from the reward: the agent is rewarded for the
+\emph{improvement} it causes. In a deployed system this baseline is computable in real time from the measured net load and
+the battery's own power. The weights mirror the score $S=(C+G+(R+1-L)/2)/3$: cost weight 1, ramping and peak $0.5$ each
+(the peak term serves as a per-step proxy for the load factor), and battery wear $w_b=0.1$. We study three weightings:
+\emph{score-aligned} ($w_g=1$), \emph{Phase~I-aligned} ($w_g=1$, $w_r=w_p=0.2$) and \emph{score-aligned with carbon
+weight 2} ($w_g=2$), which places extra emphasis on emissions.
+
+\section{Experimental Setup}\label{sec:setup}
+Every controller is trained for 200{,}000 environment steps (about 22.8 simulated years) and then evaluated with its
+deterministic policy over the full year. Each configuration is run with three seeds (42, 100, 2026), and we report mean
+$\pm$ standard deviation. SAC uses a learning rate of $3\cdot10^{-4}$, a replay buffer of 200{,}000 transitions, batch size
+256, $\tau=0.005$, $\gamma=0.99$, one gradient step per environment step, 1{,}000 random warm-up steps, automatic entropy
+tuning and two hidden layers of 64 units. TQC uses the same settings, with two critics of 25 quantiles each and the top
+two quantiles of each critic dropped; CrossQ uses a learning rate of $10^{-3}$, no target networks and its default
+policy delay of 3. PPO uses rollouts of 2{,}048 steps, batch size 128, 10 epochs, $\gamma=0.99$,
+GAE $\lambda=0.95$, clip range 0.2 and two hidden layers of 64 units. The references are no battery (all KPIs equal to one)
+and CityLearn's \texttt{BasicRBC}. To test generalisation, the trained central policies are run without any retraining on
+the five unseen buildings of \texttt{citylearn\_challenge\_2022\_phase\_2}, which share the observation and action layout,
+and the KPIs are computed against the no-battery run on those buildings.
+
+\section{Results}\label{sec:results}
+
+\subsection{Overall Comparison}
+Table~\ref{tab:main} and Fig.~\ref{fig:methods} summarise the official KPIs of all controllers. The RBC is worse than
+leaving the batteries idle on every KPI (Phase~I 1.132): it charges and discharges on a fixed schedule that ignores the
+tariff, the carbon intensity and PV. PPO with the per-building cost or carbon-weighted rewards reduces cost by 6--8\% but
+\emph{increases} emissions and grid ramping (Phase~I 0.98--1.01, $D\approx 1.5$), so it is no better than idling. Multi-KPI
+rewards help PPO (0.950 with adaptive weights), and a squared-load penalty gives the best PPO result (0.900).
+
+Switching to SAC is the largest single step: with the same fixed multi-KPI reward, Phase~I falls from 0.959 (PPO, M2)
+to 0.881 (SAC, M12). The counterfactual baseline then lowers it to 0.829 (M20), and making the terms exactly the official,
+district-level, no-battery-scaled ones lowers it to 0.786 (M26). Doubling the carbon weight gives the best SAC controller,
+M27, with Phase~I $0.768\pm0.005$ and score $0.867\pm0.005$: cost $-28.0\%$ and emissions $-18.3\%$ relative to no
+battery, and a 22\% lower Phase~I score than the best reward of the earlier carbon-weighting baselines (B3, 0.984).
+Replacing SAC by TQC \cite{kuznetsov2020tqc} with otherwise identical settings (M110) keeps the Phase~I score
+($0.768\pm0.004$) and lowers ramping, giving the best overall score of the study, $0.861\pm0.003$, with the smallest
+spread between seeds. Adding the past-only history features of Section~\ref{sec:extra} to TQC (M113) gives the best
+Phase~I score, $0.763\pm0.005$, with cost $-29.1\%$ and emissions $-18.4\%$ relative to no battery.
+
+\begin{table}[!t]
+\centering
+\caption{Official KPIs relative to no battery (lower is better), mean over three seeds ($\pm$ standard deviation for the
+two scores). Best value of each column in bold.}
+\label{tab:main}
+\setlength{\tabcolsep}{3pt}
+\footnotesize
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}llccccc@{}}
+\toprule
+ID & Controller & Phase I & Score $S$ & $C$ & $G$ & $D$ \\
+\midrule
+--  & No battery                       & 1.000 & 1.000 & 1.000 & 1.000 & \textbf{1.000} \\
+B0  & RBC (CityLearn)                  & 1.132 & 1.113 & 1.070 & 1.193 & 1.075 \\
+\midrule
+B1  & PPO, cost only                   & 1.004{\scriptsize$\pm$.004} & 1.174{\scriptsize$\pm$.015} & 0.939 & 1.070 & 1.515 \\
+B3  & PPO, static carbon               & 0.984{\scriptsize$\pm$.022} & 1.144{\scriptsize$\pm$.032} & 0.918 & 1.050 & 1.464 \\
+B4  & PPO, dynamic carbon              & 1.007{\scriptsize$\pm$.068} & 1.181{\scriptsize$\pm$.088} & 0.942 & 1.072 & 1.530 \\
+M2  & PPO, multi-KPI fixed             & 0.959{\scriptsize$\pm$.034} & 1.068{\scriptsize$\pm$.051} & 0.937 & 0.981 & 1.285 \\
+M3  & PPO, multi-KPI adaptive          & 0.950{\scriptsize$\pm$.023} & 1.077{\scriptsize$\pm$.026} & 0.923 & 0.978 & 1.330 \\
+M9  & PPO, cost + carbon + load$^2$    & 0.900{\scriptsize$\pm$.004} & 1.061{\scriptsize$\pm$.013} & 0.833 & 0.967 & 1.382 \\
+M5  & PPO, decentralised adaptive      & 1.001{\scriptsize$\pm$.000} & 1.003{\scriptsize$\pm$.000} & 1.001 & 1.001 & 1.006 \\
+\midrule
+M12 & SAC, multi-KPI fixed             & 0.881{\scriptsize$\pm$.020} & 0.982{\scriptsize$\pm$.032} & 0.831 & 0.931 & 1.184 \\
+M13 & SAC, + obs.\ and reward norm.    & 0.966{\scriptsize$\pm$.053} & 1.004{\scriptsize$\pm$.024} & 0.952 & 0.980 & 1.081 \\
+M16 & SAC, residual on RBC             & 0.956{\scriptsize$\pm$.026} & 1.007{\scriptsize$\pm$.014} & 0.933 & 0.978 & 1.111 \\
+M19 & SAC, multi-KPI, carbon 2         & 0.890{\scriptsize$\pm$.017} & 0.981{\scriptsize$\pm$.022} & 0.841 & 0.940 & 1.163 \\
+M20 & SAC, counterfactual              & 0.829{\scriptsize$\pm$.003} & 0.917{\scriptsize$\pm$.009} & 0.781 & 0.877 & 1.091 \\
+M26 & SAC, score-aligned               & 0.786{\scriptsize$\pm$.008} & 0.870{\scriptsize$\pm$.006} & 0.732 & 0.840 & 1.036 \\
+M28 & SAC, Phase I-aligned             & 0.779{\scriptsize$\pm$.003} & 0.876{\scriptsize$\pm$.001} & 0.727 & 0.831 & 1.071 \\
+M27 & SAC, score-aligned, carbon 2     & 0.768{\scriptsize$\pm$.005} & 0.867{\scriptsize$\pm$.005} & 0.720 & 0.817 & 1.064 \\
+\midrule
+M110 & TQC, score-aligned, carbon 2    & 0.768{\scriptsize$\pm$.004} & \textbf{0.861}{\scriptsize$\pm$.003} & 0.720 & \textbf{0.816} & 1.046 \\
+M113 & TQC + history features          & \textbf{0.763}{\scriptsize$\pm$.005} & 0.862{\scriptsize$\pm$.006} & \textbf{0.709} & \textbf{0.816} & 1.060 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{fig_methods.pdf}
+\caption{Cost $C$, carbon $G$ and Phase~I score of representative controllers relative to no battery (dashed line); error
+bars show the standard deviation over three seeds.}
+\label{fig:methods}
+\end{figure}
+
+\subsection{The Three Best Controllers}
+The three score-aligned SAC controllers are the best SAC controllers of the study and are remarkably consistent across
+seeds
+(Table~\ref{tab:top3}): the standard deviation of the Phase~I score is at most 0.008. Raising the carbon weight from 1 (M26)
+to 2 (M27) lowers emissions from 0.840 to 0.817 and, because cheap hours are often also clean, cost from 0.732 to 0.720, at
+the price of more ramping ($R$ 1.101 to 1.156). Lowering the grid weights (M28) gives an intermediate result. All three
+improve the load factor ($1-L<1$) but increase ramping relative to no battery, so their grid KPI $D$ stays slightly above
+one.
+
+\begin{table}[!t]
+\centering
+\caption{The three best controllers: KPIs (mean $\pm$ std over seeds 42, 100, 2026).}
+\label{tab:top3}
+\setlength{\tabcolsep}{2.5pt}
+\footnotesize
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lccc@{}}
+\toprule
+KPI & M27 (carbon 2) & M28 (Phase I-aligned) & M26 (score-aligned) \\
+\midrule
+Cost $C$          & \textbf{0.720}$\pm$0.006 & 0.727$\pm$0.004 & 0.732$\pm$0.010 \\
+Carbon $G$        & \textbf{0.817}$\pm$0.003 & 0.831$\pm$0.003 & 0.840$\pm$0.007 \\
+Ramping $R$       & 1.156 & 1.167 & \textbf{1.101} \\
+$1-L$             & 0.972 & 0.975 & \textbf{0.971} \\
+Grid $D$          & 1.064 & 1.071 & \textbf{1.036} \\
+Phase I $(C+G)/2$ & \textbf{0.768}$\pm$0.005 & 0.779$\pm$0.003 & 0.786$\pm$0.008 \\
+Score $S$         & \textbf{0.867}$\pm$0.005 & 0.876$\pm$0.001 & 0.870$\pm$0.006 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\subsection{Ablations and Negative Results}
+\emph{Off-policy learning.} With identical rewards SAC beats PPO by a wide margin (M2 vs.\ M12), consistent with its
+better sample efficiency on long-horizon continuous control; 200{,}000 steps correspond to only about 23 simulated years.
+
+\emph{Counterfactual baseline.} Adding back the no-battery terms (M12 to M20) lowers Phase~I from 0.881 to 0.829 and
+reduces the seed-to-seed spread from 0.020 to 0.003. The baseline does not change the optimal policy, so this gain comes
+entirely from lower-variance critic targets.
+
+\emph{KPI-exact terms.} Replacing per-building bills by district-level clipped cost and emissions and scaling by the
+no-battery reference (M20 to M26) gives a further 0.043. The per-building bill rewards exports that the official cost does
+not, and ignores that buildings offset each other.
+
+\emph{Normalisation hurts.} Running normalisation of observations and rewards (M13) worsens SAC from 0.881 to 0.966 and
+makes it far less stable across seeds; normalising only observations (M17, 0.886) is neutral.
+
+\emph{Decentralised PPO collapses.} Shared per-building PPO policies with adaptive weights (M5, M6) converge to leaving
+the batteries idle (all KPIs 1.00), and adding district-level penalties (M10, M11) does not prevent it. A central SAC agent with the counterfactual reward,
+carbon weight 2 and per-building (non-official) cost and carbon terms also collapsed to idling (M21, one seed), which
+motivated the KPI-exact terms of M26--M28.
+
+\emph{Residual RL.} Learning a correction on top of the RBC (M16, 0.956) is worse than learning from scratch, because the
+RBC itself is a poor starting point.
+
+\subsection{Learning Dynamics and Learned Behaviour}
+With the counterfactual reward of (\ref{eq:reward}), the mean reward per step is the weighted KPI improvement over
+idling, so zero means ``as good as no battery''. Fig.~\ref{fig:learning} shows it for the training episodes of M27 and
+M26. Both start far below zero (random exploration in the first year), cross zero in the second episode and approach their
+final level after about six to ten episodes; the three seeds of each method follow almost the same curve. The higher
+plateau of M27 reflects its doubled carbon weight, which scales its reward, rather than a better policy per se.
+Fig.~\ref{fig:week} shows one summer week of the learned policy: the batteries charge from about 09:00 to 14:00, when PV
+covers the load, and discharge from the late afternoon through the evening and night, covering the tariff peak
+(16:00--21:00) and the hours of highest carbon intensity, which lowers the evening import peak.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{fig_learning.pdf}
+\caption{Mean per-step training reward (weighted KPI improvement over no battery; 0 = as good as idling) of M27 and M26,
+three seeds each (solid: 42, dashed: 100, dotted: 2026).}
+\label{fig:learning}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{fig_week.pdf}
+\caption{One July week of M27 (seed 42): district net load with and without batteries, mean state of charge, and the
+price and carbon intensity the policy observes.}
+\label{fig:week}
+\end{figure}
+
+\subsection{Generalisation to Unseen Buildings}
+Table~\ref{tab:transfer} reports the trained policies, unchanged, on the five unseen buildings of the challenge's
+phase~2 dataset. The score-aligned controllers keep their benefit: M27 reduces cost by 27.8\% (28.0\% on the training
+buildings) and emissions by 20.7\% (18.3\%), while the earlier SAC multi-KPI controller (M12) transfers much less
+well. The ranking on the unseen buildings follows the ranking on the training buildings, so the gains from reward design
+are not an artefact of fitting the five training buildings. The public formula of the challenge's Phase~III, $0.4\,S_\mathrm{train}+0.6\,S_\mathrm{unseen}$, gives
+$0.859\pm0.005$ for M27, $0.853\pm0.002$ for the TQC controller M110 and $0.854\pm0.001$ for TQC with history features
+(M113). M113 also gives the largest savings on the unseen buildings: cost $-29.1\%$ and emissions $-20.9\%$.
+
+\begin{table}[!t]
+\centering
+\caption{Policies trained on the phase 1 buildings, evaluated without retraining on the five unseen phase 2 buildings
+(mean over three seeds; M12 and M20: seed 42 only).}
+\label{tab:transfer}
+\setlength{\tabcolsep}{3pt}
+\footnotesize
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Controller & $C$ & $G$ & $D$ & $S_\mathrm{unseen}$ & $0.4S_\mathrm{train}+0.6S_\mathrm{unseen}$ \\
+\midrule
+M12 SAC multi-KPI          & 0.811 & 0.893 & 1.099 & 0.934 & 0.946 \\
+M20 SAC counterfactual     & 0.777 & 0.848 & 1.066 & 0.897 & 0.905 \\
+M26 SAC score-aligned      & 0.736 & 0.815 & \textbf{1.021} & 0.857 & 0.862 \\
+M28 SAC Phase I-aligned    & 0.723 & 0.809 & 1.050 & 0.861 & 0.867 \\
+M27 SAC score-aligned, c.\ 2 & 0.722 & 0.793 & 1.049 & 0.854 & 0.859 \\
+M112 M27 + history features  & 0.715 & 0.803 & 1.025 & \textbf{0.847} & 0.854 \\
+M110 TQC score-aligned, c.\ 2 & 0.718 & 0.793 & 1.032 & \textbf{0.847} & \textbf{0.853} \\
+M113 TQC + history features  & \textbf{0.709} & \textbf{0.791} & 1.046 & 0.849 & 0.854 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\subsection{Additional Algorithms, Architectures and Features}\label{sec:extra}
+Starting from M27, we screened further changes, one at a time, on a shorter budget of 60{,}000 steps (about seven
+simulated years) and seed 42 (Table~\ref{tab:screen}). The reference is M27 retrained with the same budget (M102), whose
+Phase~I score over three seeds is $0.794\pm0.016$ (seed 42: 0.803). The algorithms are TQC \cite{kuznetsov2020tqc}, with
+truncated distributional critics, and CrossQ \cite{bhatt2024crossq}, with batch-normalised critics and no target networks.
+The history features, computed only from past observations, are the cyclic hour and month and a persistence forecast
+taken from yesterday: the carbon intensity and the district load minus PV $24-h$ hours earlier for the next
+$h=1,2,3,6,12$ hours. The environment provides no forecast of carbon intensity or load, and both follow a daily pattern.
+The ``rich'' variant adds each building's own lagged load minus PV, the values 24 hours earlier and yesterday's mean and
+maximum; the ``dense'' variant uses every next hour from 1 to 12.
+
+No change improved on the control by more than its seed-to-seed spread. The history features gave the best single run
+(0.774), but over three seeds they scored $0.808\pm0.030$, no better than the control; TQC (0.794) and the history
+variants with observation normalisation (0.787), a batch of 512 (0.787) or rich features (0.789) were also within one
+standard deviation. Larger
+networks, two gradient updates per step, a carbon weight of 3, $\gamma=0.95$ and CrossQ were slightly worse.
+Three-step returns, a faster target update ($\tau=0.02$) and a shared per-building SAC policy were clearly worse; the
+latter collapsed to idling, like the decentralised PPO agents. Averaging the actions of the three M27 seeds also hurt
+(Phase~I 0.841), because the averaged actions are too cautious. With the reward fixed, the choice of off-policy algorithm,
+network size and input features matters much less than the reward design and the training length.
+
+\begin{table}[!t]
+\centering
+\caption{Screening of additional changes to M27 at 60{,}000 environment steps (Phase~I and score relative to no
+battery; seed 42 unless stated). Control: M27 at the same budget.}
+\label{tab:screen}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}llcccc@{}}
+\toprule
+ID & Change from M27 & Phase I & Score $S$ & $C$ & $G$ \\
+\midrule
+M102 & none (control), 3 seeds            & 0.794{\scriptsize$\pm$.016} & 0.882{\scriptsize$\pm$.006} & 0.751 & 0.838 \\
+M93  & history features, 3 seeds          & 0.808{\scriptsize$\pm$.030} & 0.887{\scriptsize$\pm$.010} & 0.769 & 0.847 \\
+\midrule
+M93  & history features (seed 42)         & 0.774 & 0.876 & 0.728 & 0.821 \\
+M105 & history + observation norm.        & 0.787 & 0.886 & 0.738 & 0.835 \\
+M107 & history, batch size 512            & 0.787 & 0.878 & 0.744 & 0.830 \\
+M103 & rich history                       & 0.789 & 0.876 & 0.746 & 0.832 \\
+M91  & TQC, 256$\times$256                & 0.794 & 0.887 & 0.750 & 0.838 \\
+M104 & dense history                      & 0.801 & 0.879 & 0.765 & 0.837 \\
+M96  & 256$\times$256 + history           & 0.801 & 0.884 & 0.755 & 0.847 \\
+M92  & CrossQ, 256$\times$256             & 0.805 & 0.892 & 0.768 & 0.842 \\
+M95  & $\gamma = 0.95$                    & 0.808 & 0.887 & 0.761 & 0.854 \\
+M90  & 256$\times$256 networks            & 0.809 & 0.899 & 0.764 & 0.853 \\
+M99  & 2 gradient steps per env step      & 0.809 & 0.898 & 0.772 & 0.847 \\
+M97  & TQC + history                      & 0.810 & 0.897 & 0.764 & 0.856 \\
+M106 & history, learning rate $10^{-3}$   & 0.810 & 0.898 & 0.768 & 0.852 \\
+M100 & CrossQ + history                   & 0.812 & 0.890 & 0.779 & 0.846 \\
+M101 & carbon weight 3                    & 0.813 & 0.892 & 0.767 & 0.860 \\
+M108 & history, $\tau = 0.02$             & 0.859 & 0.931 & 0.829 & 0.890 \\
+M94  & 3-step returns                     & 0.864 & 0.928 & 0.824 & 0.903 \\
+M98  & shared per-building policy         & 1.000 & 1.000 & 1.000 & 1.000 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\subsection{Full-Budget Tests and Training Length}
+Because screening at 60{,}000 steps is noisy, the most promising variants were retrained at the full budget with three
+seeds (Table~\ref{tab:full}). TQC (M110), the best algorithm in the screening, matches M27 on cost and carbon and
+improves the grid KPI ($D$ 1.046 vs.\ 1.064), giving the best score, $0.861\pm0.003$, with the smallest spread across
+seeds, consistent with the reduced over-estimation bias of its truncated distributional critics
+\cite{kuznetsov2020tqc}. The gain is not specific to one weighting: with the score-aligned reward of carbon weight 1,
+TQC (M114) improves on SAC (M26) from $0.786\pm0.008$ to $0.774\pm0.006$ in Phase~I and from 0.870 to 0.866 in score. With the history
+features (M112), the Phase~I score ($0.771\pm0.007$) is statistically
+indistinguishable from M27 ($0.768\pm0.005$): cost and the grid KPI improve slightly ($C$ 0.717, $D$ 1.048) while
+emissions rise slightly ($G$ 0.825). On the unseen buildings M112 is marginally better than M27 (public score
+$0.854\pm0.006$ vs.\ $0.859\pm0.005$, Table~\ref{tab:transfer}), mainly through a lower $D$. Stacking the rich history
+with observation normalisation (M111) is clearly worse ($0.795\pm0.008$). Combining the two best changes, TQC and the
+history features (M113), gives the best Phase~I score of the study, $0.763\pm0.005$, through a lower cost ($C$ 0.709)
+at unchanged emissions ($G$ 0.816), and the largest savings on the unseen buildings ($C$ 0.709, $G$ 0.791); its score
+($0.862\pm0.006$) equals that of TQC alone. With TQC, the persistence forecast of carbon intensity and net load thus helps
+the policy to schedule cheaper charging, while with SAC its benefit was within the seed-to-seed spread.
+
+Training length matters, but not monotonically. M27 scores $0.794\pm0.016$ after 60{,}000 steps, $0.768\pm0.005$ after
+200{,}000 and $0.786\pm0.013$ when training continues to 400{,}000 steps from the 200{,}000-step checkpoints (M109): with a
+constant learning rate and entropy target, the policy drifts after it has converged, and the spread between seeds grows
+again. Early stopping on a validation year, or a decaying learning rate, would be needed to exploit longer training.
+
+\begin{table}[!t]
+\centering
+\caption{Full-budget variants of M27 (three seeds, mean $\pm$ std; lower is better).}
+\label{tab:full}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}llccccc@{}}
+\toprule
+ID & Variant & Steps & Phase I & Score $S$ & $C$ & $G$ \\
+\midrule
+M102 & M27 (short budget)              & 60k  & 0.794{\scriptsize$\pm$.016} & 0.882{\scriptsize$\pm$.006} & 0.751 & 0.838 \\
+M27  & proposed (SAC)                  & 200k & 0.768{\scriptsize$\pm$.005} & 0.867{\scriptsize$\pm$.005} & 0.720 & 0.817 \\
+M112 & + history features              & 200k & 0.771{\scriptsize$\pm$.007} & 0.863{\scriptsize$\pm$.004} & 0.717 & 0.825 \\
+M111 & + rich history + obs.\ norm.    & 200k & 0.795{\scriptsize$\pm$.008} & 0.891{\scriptsize$\pm$.009} & 0.747 & 0.843 \\
+M109 & M27 trained longer              & 400k & 0.786{\scriptsize$\pm$.013} & 0.885{\scriptsize$\pm$.018} & 0.738 & 0.833 \\
+M110 & TQC instead of SAC              & 200k & 0.768{\scriptsize$\pm$.004} & \textbf{0.861}{\scriptsize$\pm$.003} & 0.720 & \textbf{0.816} \\
+M113 & TQC + history features          & 200k & \textbf{0.763}{\scriptsize$\pm$.005} & 0.862{\scriptsize$\pm$.006} & \textbf{0.709} & \textbf{0.816} \\
+\midrule
+M26  & SAC, carbon weight 1            & 200k & 0.786{\scriptsize$\pm$.008} & 0.870{\scriptsize$\pm$.006} & 0.732 & 0.840 \\
+M114 & TQC, carbon weight 1            & 200k & 0.774{\scriptsize$\pm$.006} & 0.866{\scriptsize$\pm$.004} & 0.721 & 0.826 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\subsection{Comparison with the Challenge Leaderboard}
+The Phase~I leaderboard of the 2022 challenge \cite{citylearn2022challenge} ranked entries by $(C+G)/2$ on the same five
+buildings. Its best published entries scored 0.631, 0.635 and 0.651. Our best controller, M113 ($0.763$), would rank 11th among
+the 14 published entries, just ahead of the 11th and 12th entries (0.768, which M27 and M110 equal) and of the last two
+(0.800, 0.801). Leaderboard entries were free to use any technique,
+including hand-tuned rules, optimisation and forecasting; our result is obtained by a single model-free policy trained
+from reward alone. On the challenge's combined public score the best entry reached 0.728, compared with 0.853--0.854 for our TQC controllers (M110, M113), so a
+clear gap remains, mostly in the grid KPI $D$.
+
+\section{Discussion}\label{sec:discussion}
+\emph{What matters most.} The ablations point to one principle: the reward should measure, on the right scale, what the
+evaluation measures, and as much of the uncontrollable variation as possible should be removed from it. SAC benefits more
+from these changes than PPO, and the gains add up.
+
+\emph{Grid KPIs.} All our best controllers increase ramping relative to no battery. Raising the ramping weight improves $D$
+(M26) but costs carbon and money, and the peak term is only a proxy for the load factor. A better per-step surrogate for
+$1-L$ and ramp-aware action smoothing are promising directions.
+
+\emph{Deployability.} The controllers use only information available in a real building: present measurements, the
+environment's weather and tariff forecasts, and the measured battery power (for the counterfactual baseline during
+training). They transfer to unseen buildings without retraining, which supports their use as a starting point that can be
+fine-tuned on site.
+
+\emph{Limitations.} The study uses one climate, five training buildings and one year of data; carbon intensity and load
+are not forecast by the environment. Three seeds give reliable means at the full budget (standard deviations
+$\le 0.008$ for the best controllers), but at 60{,}000 steps the spread grows to 0.016--0.030, so single-seed screening at
+short budgets can mislead: the history features looked best with SAC on one seed, gave no reliable gain over three
+seeds, and only helped once combined with TQC at the full budget. Larger studies should use more seeds
+\cite{agarwal2021precipice}.
+
+\section{Conclusion}\label{sec:conclusion}
+We studied 52 genuinely deployable deep RL controllers for community battery storage on the CityLearn 2022 benchmark. A
+rule-based controller and naive RL rewards were no better than leaving the batteries idle. A score-aligned
+counterfactual reward, whose per-step terms add up to the official KPIs on the no-battery scale and measure the
+improvement over idling, combined with SAC and an increased carbon weight, reduced electricity cost by 28.0\% and
+emissions by 18.3\% over three seeds. With TQC the same reward gave the best overall score ($0.861$), and TQC with
+past-only history features the best Phase~I score ($0.763$; cost $-29.1\%$, emissions $-18.4\%$) and the largest savings
+on five unseen buildings (cost $-29.1\%$, emissions $-20.9\%$). Reward alignment, together with an off-policy learner, was
+the decisive factor; larger networks, CrossQ, multi-step returns and longer training did not help, and the choice between
+SAC and TQC and the history features changed the result by less than 1\%. This gives practitioners a simple recipe for building RL controllers that optimise what
+operators are actually measured on.
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

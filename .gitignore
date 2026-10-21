@@ -39,3 +39,20 @@ Thumbs.db
 
 # SAC replay buffers (too large for GitHub)
 replay_buffer.pkl
+
+# Behaviour-cloning datasets (large, regenerable)
+bc_data.npz
+
+# Results are not pushed: only code and the paper (2026-10-21)
+results/
+results_smoke_test/
+01_notebook_pipeline/results/
+colab/*.npz
+colab/*.zip
+colab/deep_forecasters/
+04 - Phase 3 Results Summary.md
+05 - Paper Claims.md
+ResearchPaper/*.aux
+ResearchPaper/*.bbl
+ResearchPaper/*.blg
+ResearchPaper/*.out

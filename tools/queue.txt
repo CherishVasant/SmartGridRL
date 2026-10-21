@@ -1,0 +1,113 @@
+# Run queue for tools/supervisor.py (read by run_all.bat). One notebook name per line, highest priority first.
+# Finished notebooks (every seed has summary.json) are skipped; unfinished seeds resume from their checkpoint.
+# Deliberately NOT listed (stopped on purpose, see PLAN.md): M21, M22, M23, M24, M25 (collapse family),
+# M29-M32 (residual SAC around the plan), M34, M36, M43, M44, M46 (clone + SAC fine-tuning).
+
+# Rounds 20-21 main notebooks (seed 42) first
+M83_bc_3x512_o3_dagger15
+M84_bc_3x512_o3_dagger20
+M85_bc_4x512_o3_dagger15
+M86_bc_3x512_o10_dagger15
+M87_bc_o9_permute2
+M88_bc_4x512_o9_permute2
+M89_bc_o9_permute4
+# Rounds 20-21, extra seeds in parallel (one notebook per seed; seeds are claimed via claim.json)
+M83_bc_3x512_o3_dagger15__s100
+M83_bc_3x512_o3_dagger15__s2026
+M84_bc_3x512_o3_dagger20__s100
+M84_bc_3x512_o3_dagger20__s2026
+M85_bc_4x512_o3_dagger15__s100
+M85_bc_4x512_o3_dagger15__s2026
+M86_bc_3x512_o10_dagger15__s100
+M86_bc_3x512_o10_dagger15__s2026
+M87_bc_o9_permute2__s100
+M87_bc_o9_permute2__s2026
+M88_bc_4x512_o9_permute2__s100
+M88_bc_4x512_o9_permute2__s2026
+M89_bc_o9_permute4__s100
+M89_bc_o9_permute4__s2026
+# Round 20: many more DAgger iterations on the Phase I plan (10 iterations reached 0.637; Together 0.635)
+# Round 21: generalisation by building-order augmentation
+# Round 19: generalisation to unseen buildings (input noise, smaller network) on the clone of O9
+# M80_bc_o9_noise01  (stopped after seed 42: input noise hurt generalisation)
+# M81_bc_o9_noise03  (stopped after seed 42: input noise hurt generalisation)
+M82_bc_o9_small_noise01
+# Round 18: more precise imitation of the Phase I plan O3 (M66 is a robust published #3, 0.005 behind Together)
+# M76_bc_5x512_o3_dagger6  (dropped 2026-10-18: dominated, focus on Rounds 20-21)
+# M77_bc_4x1024_o3_dagger6  (dropped 2026-10-18: dominated, focus on Rounds 20-21)
+# M78_bc_4x512_o3_dagger10  (dropped 2026-10-18: dominated, focus on Rounds 20-21)
+# M79_bc_4x512_o3_gain02  (dropped 2026-10-18: dominated, focus on Rounds 20-21)
+# Round 17: clones of the new plans around O9 (O10 grid 0.1, O11 carbon 2), 6 DAgger iterations
+M72_bc_3x512_o10_dagger6
+M73_bc_3x512_o11_dagger6
+M74_bc_4x512_o10_dagger6
+M75_bc_3x512_o9_dagger6
+# Round 15: big clones of the Phase I plan O3 (aimed at the published top 3)
+M65_bc_3x512_o3
+M66_bc_4x512_o3
+M67_bc_3x512_o3_dagger6
+# Round 16: biggest networks + 6-10 DAgger iterations on the three plans
+M68_bc_4x512_o3_dagger6
+M69_bc_4x512_o9_dagger6
+# M70_bc_4x512_o2_dagger6  (dropped 2026-10-18: dominated, focus on Rounds 20-21)
+M71_bc_3x512_o3_dagger10
+# Round 14: bigger networks, more DAgger
+M61_bc_4x512
+M62_bc_3x1024
+M63_bc_3x512_dagger6
+M64_bc_3x512_o9
+# Round 13: deep clones of plans with a better Phase I score
+M57_bc_deep_o6
+M58_bc_deep_o3
+M59_bc_deep_o9
+M60_bc_deep_o6_dagger6
+# Round 12: deep clones
+M51_bc_deep_gentle
+M52_bc_deep_members
+M53_bc_deeper_gentle
+M54_bc_wide_gentle
+M55_bc_deep_gentle_o8
+M56_bc_deep_dagger6
+# Round 11 / 10 / 9: big clones + gentle DAgger, ensemble members
+M47_bc_grid_members
+M48_bc_big_gentle_members
+M49_bc_big_gentle_dagger6
+M50_bc_big_gentle_gain05
+M41_bc_grid_big_gentle
+M42_bc_grid2_big_gentle
+M45_bc_grid_gentle
+# Rounds 7-8: clones
+M33_bc_lp_grid
+M35_bc_lp_phase1
+M37_bc_grid_big_dagger
+M38_bc_grid_big
+M39_bc_grid_dagger
+M40_bc_grid2_big_dagger
+# Round 5: score-aligned pure SAC (3 seeds for the paper's RL comparison)
+M26_sac_score_aligned
+M27_sac_score_aligned_carbon2
+M28_sac_phase1_aligned
+# Earlier rounds (all finished; kept so a fresh results folder can be rebuilt)
+M17_sac_multikpi_obsnorm
+M18_sac_multikpi_batt05
+M19_sac_multikpi_carbon2
+M20_sac_multikpi_counterfactual
+M13_sac_multikpi_fixed_norm
+M14_sac_multikpi_adaptive_norm
+M15_sac_load_squared_norm
+M16_sac_residual_rbc_norm
+M7_multikpi_adaptive_norm
+M8_multikpi_fixed_norm
+M9_load_squared
+M10_per_building_dynamic_district
+M11_per_building_adaptive_district
+M12_sac_multikpi_fixed
+M1_dynamic_sharp
+M2_multikpi_fixed
+M3_multikpi_adaptive
+M4_per_building_dynamic
+M5_per_building_adaptive_shared
+M6_per_building_adaptive_own
+B1_cost_only
+B3_static_matched
+B4_dynamic

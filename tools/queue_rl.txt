@@ -1,0 +1,76 @@
+# Run queue from 2026-10-19: genuine RL only (no perfect-foresight plans, no imitation; see PLAN.md).
+# Explore on seed 42; methods that help get seeds 100 and 2026 afterwards.
+# Round 22: one change at a time from M27 (SAC, score-aligned reward, carbon 2), plus two early combinations
+M90_sac_c2_256
+M91_tqc_c2_256
+M92_crossq_c2_256
+M93_sac_c2_history
+M94_sac_c2_nstep3
+M95_sac_c2_gamma095
+M96_sac_c2_256_history
+M97_tqc_c2_256_history
+# Round 22b: more single changes from M27 (added 2026-10-19 18:25)
+M98_sac_c2_per_building
+M99_sac_c2_utd2
+M100_crossq_c2_256_history
+M101_sac_c3
+M102_sac_c2_60k
+# Seeds for the front-runner and its 60k control (2026-10-19 19:30)
+M93_sac_c2_history__s100
+M93_sac_c2_history__s2026
+M102_sac_c2_60k__s100
+M102_sac_c2_60k__s2026
+# Round 23: build on M93 (history features), seed 42, 60k steps
+M103_sac_hist_rich
+M104_sac_hist_dense
+M105_sac_hist_obsnorm
+M106_sac_hist_lr1e3
+M107_sac_hist_batch512
+M108_sac_hist_tau002
+# Longer training of M27 (from its 200k checkpoints)
+M109_sac_c2_400k
+M109_sac_c2_400k__s100
+M109_sac_c2_400k__s2026
+# TQC at the full budget with M27 settings
+M110_tqc_c2
+M110_tqc_c2__s100
+M110_tqc_c2__s2026
+# Full-budget history tests (3 seeds in parallel)
+M111_sac_hist_rich_obsnorm
+M111_sac_hist_rich_obsnorm__s100
+M111_sac_hist_rich_obsnorm__s2026
+M112_sac_hist_200k
+M112_sac_hist_200k__s100
+M112_sac_hist_200k__s2026
+# TQC + history features, full budget
+M113_tqc_hist
+M113_tqc_hist__s100
+M113_tqc_hist__s2026
+M114_tqc_score_aligned
+M114_tqc_score_aligned__s100
+M114_tqc_score_aligned__s2026
+# Round 25: improve M113 (TQC + history), full budget, 3 seeds each
+M115_tqc_hist_5critics
+M116_tqc_hist_lrdecay300k
+M117_tqc_hist_drop5
+M118_tqc_hist_utd2
+M119_tqc_hist_ent10
+# Round 25b: more single changes to M113, seed 42 only
+M120_tqc_hist_phase1
+M121_tqc_hist_c15
+M122_tqc_hist_256
+M123_tqc_hist_gamma098
+M124_tqc_hist_batch512
+M125_tqc_hist_rich
+M126_tqc_hist_dense
+M127_tqc_hist_nowear
+M128_tqc_hist_wear03
+# Round 26: RL-tuned MPC (forecasting + optimisation + RL), seed 42
+M129_rl_tuned_mpc
+M130_rl_tuned_mpc_sac
+M131_rl_tuned_gbm_mpc
+M132_rl_tuned_mpc_grid
+# Round 27: improve M131 (RL-tuned LightGBM MPC), seed 42
+M133_rl_gbm_mpc_score_reward
+M134_rl_gbm_mpc_200k
+M135_rl_gbm_mpc_sac
