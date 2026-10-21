@@ -74,3 +74,8 @@ M132_rl_tuned_mpc_grid
 M133_rl_gbm_mpc_score_reward
 M134_rl_gbm_mpc_200k
 M135_rl_gbm_mpc_sac
+# 3-seed confirmation of the best controller (RL-tuned LightGBM MPC)
+M131_rl_tuned_gbm_mpc__s100
+M131_rl_tuned_gbm_mpc__s2026
+M135_rl_gbm_mpc_sac__s100
+M135_rl_gbm_mpc_sac__s2026

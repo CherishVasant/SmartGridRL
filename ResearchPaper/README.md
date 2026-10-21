@@ -1,12 +1,13 @@
 # ResearchPaper
 
-IEEE journal-format paper (IEEEtran) on genuinely deployable RL battery control (CityLearn 2022). Only real RL methods
-are reported (PPO / SAC with different rewards); no perfect-foresight plans and no imitation/cloning results.
+IEEE journal-format paper (IEEEtran) on deployable battery control for CityLearn 2022: model-free RL (PPO, SAC, TQC,
+CrossQ) with score-aligned rewards, forecast-driven MPC, and an RL-tuned MPC, compared with the published Phase III
+leaderboard. No perfect-foresight plans and no imitation/cloning results.
 
 | File | What it is |
 |---|---|
 | `main.tex` | The paper |
-| `references.bib` | The 32 references (all cited) |
+| `references.bib` | The 37 references (all cited) |
 | `main.pdf` | Compiled paper |
 | `figures/make_figures.py` | Rebuilds the three figures from `../results` |
 

@@ -48,15 +48,36 @@ of seeds 42, 100 and 2026; single-seed results use seed 42.
 | 9 | LA_gang | 0.796 | 0.665 | 0.852 | 0.873 |
 | 10 | tymur_prorochenko | 0.797 | 0.693 | 0.861 | 0.838 |
 
-Our C, G and D in this row are the same 0.4 / 0.6 blend of the training and validation districts (M131). We already beat
-every listed team on **carbon** (0.769 vs 0.803 at best); the gap to the top is mainly the **grid KPI D**.
+Our C, G and D in this row are the same 0.4 / 0.6 blend of the training and validation districts (M131).
+
+**Where we stand, KPI by KPI** (Phase III public formula; lower is better)
+
+| KPI | Ours (M131) | Best published | Where we'd rank |
+|---|---|---|---|
+| **Carbon G** | **0.769** | 0.803 (ambitiousengineers) | **1st** (−4% vs the best team) |
+| Cost C | 0.661 | 0.639 (Together) | about 5th (behind Together, EVERGi, DivMARL, Orca) |
+| Grid D | 0.916 | 0.738 (Together) | worse than all top 10 |
+| **Overall** | **0.782** | **0.728** (Together) | between 7th and 8th |
+
+> [!success] What this means
+> Without any future data, our controller has the **lowest carbon of every published Phase III entry**, a top-5 bill,
+> and an overall score between 7th and 8th place. The gap to the winner is mainly the **grid KPI D** (smoothness of the
+> district load); our reward weights carbon twice as much as cost, which trades some grid smoothness for emissions.
+
+> [!warning] Status of these numbers
+> - Single seed (42); seeds 100 and 2026 of M131 / M135 are running to confirm them.
+> - Computed locally with the official KPI formulas on CityLearn 2.1.2, not by the challenge's own evaluator.
+> - The dataset's "predicted" weather equals the actual weather; every team received the same, so it favours no one.
 
 **Phase I leaderboard** (cost and carbon only, on the 5 public training buildings): tymur 0.631 · Together 0.635 ·
-ROLEVT 0.651 · OneWo 0.698 · LA_gang 0.719 · DivMARL 0.728. Our best deployable Phase I is **0.723** (≈ 5th).
+ROLEVT 0.651 · OneWo 0.698 · LA_gang 0.719 · DivMARL 0.728. Our best deployable Phase I is **0.723** (6th, between LA_gang and DivMARL).
 
 > [!warning] Why Phase I is not the fair target
-> Phase I was scored on the same public year the teams were given, and at least one top team optimised on the actual
-> future data there. Phase III adds buildings that no team had seen, so it measures a real-world controller. Our
+> Phase I was scored on the same public year the teams were given in full, so optimising on that year's actual data
+> (foresight) was possible and allowed: the 2nd-placed team (ambitiousengineers) did so in Phase I with dynamic
+> programming, and 5th-placed Greener used it to create imitation targets (challenge overview paper, Nweye et al. 2023).
+> Whether the Phase I leaders themselves used it is not documented. Phase III adds buildings that no team had seen, so
+> it measures a real-world controller. Our
 > forecasters are stricter still: they are never trained on the buildings they forecast, while the published teams'
 > forecasters were trained on the training buildings that make up 40% of the public score.
 
@@ -249,6 +270,7 @@ the main limit: with *perfect* load forecasts the same MPC would score S = 0.633
 | M132 | seasonal, grid-weighted reward | TQC | 0.747 | 0.810 | 0.703 | 0.791 | 0.934 | 0.808 | 0.866 |
 | **M131** | **LightGBM** | **TQC** | **0.723** | 0.787 | 0.664 | **0.783** | 0.914 | **0.782** | 0.845 |
 | **M135** | **LightGBM** | **SAC** | 0.724 | **0.786** | 0.665 | **0.783** | **0.909** | **0.782** | **0.844** |
+| M133 | LightGBM, carbon weight 1 | TQC | 0.727 | **0.786** | 0.669 | 0.784 | **0.905** | – | – |
 
 > [!success] Result
 > RL on top of the LightGBM-driven MPC gives the **best deployable results of the project** on every score: bill
