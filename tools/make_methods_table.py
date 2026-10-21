@@ -131,12 +131,48 @@ if p3_path.exists():
         if rl:
             row['phase3_seed'] = '42'
 
+# ---- every defined method gets a row (unfinished ones with empty metrics), plus round and status
+import sys
+sys.path.insert(0, str(Path(__file__).parent))
+from rounds import method_rounds   # noqa: E402
+ROUND = method_rounds()
+src = (Path(__file__).parent / 'core_src.py').read_text(encoding='utf-8')
+for m in ROUND:
+    if m not in rows:
+        label = re.search(rf"'{re.escape(m)}'[^\n]*?label='([^']*)'", src) or \
+                re.search(rf"'{re.escape(m)}'.*?label='([^']*)'", src, re.S)
+        rows[m] = {'method': m, 'label': label.group(1) if label else ''}
+
+
+def status(m):
+    finished = list((R / m).glob('seed_*/summary.json'))
+    if finished or m in ('B0_RBC',) or (R / m / 'eval_trace.csv').exists():
+        return 'finished'
+    steps = []
+    for p in (R / m).glob('seed_*/checkpoint.json'):
+        try:
+            steps.append(json.load(open(p))['env_steps'])
+        except (OSError, ValueError, KeyError):
+            pass
+    dagger = []
+    for p in (R / m).glob('seed_*/bc_state.json'):
+        try:
+            dagger.append(json.load(open(p))['dagger_iters_done'])
+        except (OSError, ValueError, KeyError):
+            pass
+    if steps:
+        return f'not finished: last checkpoint at {max(steps):,} env steps'
+    if dagger:
+        return f'not finished: stopped after {max(dagger)} DAgger iterations'
+    return 'not finished: stopped before its first checkpoint' if (R / m).exists() else 'not run'
+
+
 df = pd.DataFrame(rows.values())
-for m in df['method']:
-    pass
+df.insert(1, 'round', df['method'].map(lambda m: ROUND.get(m, np.nan)).astype('Int64'))
+df.insert(2, 'status', df['method'].map(lambda m: status(m) if (m in ROUND or (R / m).exists()) else 'finished'))
 types = df['method'].map(method_type)
-df.insert(2, 'type', [t[0] for t in types])
-df.insert(3, 'deployable', [t[1] for t in types])
+df['type'] = [t[0] for t in types]
+df['deployable'] = [t[1] for t in types]
 for m in df.index:
     if df.at[m, 'seeds_averaged'] != df.at[m, 'seeds_averaged']:   # NaN
         df.at[m, 'seeds_averaged'] = ''
@@ -144,7 +180,7 @@ for m in df.index:
 det = df['method'].str.match(r'^(O\d|MPC|E_|ER_|B0_|B5_)')
 df.loc[det & (df['seeds_averaged'] == '0'), 'seeds_averaged'] = 'deterministic (no seed)'
 df = df.iloc[sorted(range(len(df)), key=lambda i: order_key(df['method'].iloc[i]))]
-first = ['method', 'label', 'type', 'deployable', 'env_steps_trained', 'n_seeds',
+first = ['method', 'round', 'status', 'label', 'type', 'deployable', 'env_steps_trained', 'n_seeds',
          'phase1_score_mean', 'phase1_score_std', 'phase3_score_mean', 'phase3_score_std',
          'cost_C', 'carbon_G', 'ramping_R', 'one_minus_load_factor', 'grid_D']
 p3_cols = ['PHASE3_PUBLIC_score', 'PHASE3_PRIVATE_score', 'phase3_train_district_score', 'phase3_val_district_score',
@@ -163,7 +199,8 @@ with pd.ExcelWriter(ROOT / 'all_methods_results.xlsx', engine='openpyxl') as xl:
     df.to_excel(xl, sheet_name='All methods', index=False)
     notes = pd.DataFrame({'column / term': [
         'all KPIs', 'phase1_score', 'phase3_score', 'cost_C / carbon_G', 'ramping_R / one_minus_load_factor / grid_D',
-        'PHASE3_PUBLIC_score', 'PHASE3_PRIVATE_score', 'unseen_val_*', '*_vs_RBC', 'deployable', 'seeds_averaged'],
+        'PHASE3_PUBLIC_score', 'PHASE3_PRIVATE_score', 'unseen_val_*', '*_vs_RBC', 'deployable', 'round', 'status',
+        'seeds_averaged'],
         'meaning': [
         'Ratios to the no-battery case on the 5 training buildings (citylearn_challenge_2022_phase_1); lower is better',
         'mean(C, G): the challenge Phase I leaderboard metric',
@@ -175,6 +212,8 @@ with pd.ExcelWriter(ROOT / 'all_methods_results.xlsx', engine='openpyxl') as xl:
         'The same trained policy, unchanged, on the 5 unseen validation buildings (phase_2)',
         'KPIs relative to the CityLearn rule-based controller (older reference)',
         'no = uses future data (perfect-foresight plan or its imitation): a reference, not a real-world controller',
+        'Experiment round (notebooks in code/Round_XX); MPC / Phase III-only controllers have no round',
+        'finished, or why there is no result yet (still training / stopped, with the last saved checkpoint)',
         'Seeds whose results were averaged for the numeric columns (Phase III columns: phase3_seed)']})
     notes.to_excel(xl, sheet_name='Column notes', index=False)
     for ws in xl.book.worksheets:
