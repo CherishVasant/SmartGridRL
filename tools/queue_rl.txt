@@ -79,3 +79,43 @@ M131_rl_tuned_gbm_mpc__s100
 M131_rl_tuned_gbm_mpc__s2026
 M135_rl_gbm_mpc_sac__s100
 M135_rl_gbm_mpc_sac__s2026
+# Round 29: improve M131 (tuned forecasts, horizon, ramp weight, reward, gamma) + pure-RL follow-ups, seed 42
+M139_rl_mpc_gbm_tuned
+M140_rl_mpc_h36
+M141_rl_mpc_grid3
+M142_rl_mpc_gbm_gridreward
+M143_rl_mpc_gamma098
+M144_rl_mpc_tuned_h36
+M145_rl_mpc_tuned_grid3
+M146_tqc_hist_g098_wear03
+M147_tqc_hist_gamma097
+# Round 30: improve M139 / M144 (tuned LightGBM forecasts: horizon 30/48, 200k steps, SAC, reward, MPC weights), seed 42
+M148_rl_mpc_tuned_h48
+M149_rl_mpc_tuned_h36_200k
+M150_rl_mpc_tuned_sac
+M151_rl_mpc_tuned_h36_score
+M152_rl_mpc_tuned_h30
+M153_rl_mpc_tuned_h36_carbon15
+M154_rl_mpc_tuned_h36_grid15
+M155_rl_mpc_tuned_h36_sac
+# Round 31: RL also sets the MPC's peak-shaving weight (load factor is the weak KPI), seed 42
+M156_rl_mpc_peak
+M157_rl_mpc_peak_reward
+M158_rl_mpc_peak2
+# 3-seed confirmation of the best controllers (tuned-forecast RL-tuned MPC): seeds 100, 2026
+M152_rl_mpc_tuned_h30__s100
+M152_rl_mpc_tuned_h30__s2026
+M155_rl_mpc_tuned_h36_sac__s100
+M155_rl_mpc_tuned_h36_sac__s2026
+# Round 32: residual RL on the MPC action + history observation (on M152), seed 42
+M159_rl_mpc_residual
+M160_rl_mpc_residual10
+M161_rl_mpc_hist
+M162_rl_mpc_residual_hist
+M163_rl_mpc_residual_hist_sac
+# Round 33: bigger actor / critic networks (256x2, 512x3, 1024x2; on M152 and M113), seed 42
+M164_rl_mpc_net256
+M165_rl_mpc_net512x3
+M166_rl_mpc_net1024
+M167_rl_mpc_net512x3_200k
+M168_tqc_hist_net512x3

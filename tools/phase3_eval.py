@@ -13,6 +13,7 @@ Usage (from the project folder): python tools/phase3_eval.py <name> mpc [horizon
        python tools/phase3_eval.py <name> mpcgbm | mpcblend [horizon] [w_carbon] [w_grid] [term_frac]
        python tools/phase3_eval.py <name> rltuned <METHOD> [seed]      (a trained mpc_tune policy)
        python tools/phase3_eval.py <name> mpcdeep <mlp|lstm|transformer> [horizon] [w_carbon] [w_grid]
+       python tools/phase3_eval.py <name> mpcfc <gbm|gbm_tuned|deep_mlp|...> [horizon] [w_carbon] [w_grid] [scenarios]
 """
 import torch   # noqa: F401  (before pandas: WinError 1114)
 import json
@@ -124,6 +125,16 @@ if __name__ == '__main__':
             fc = ns['DeepForecaster'](B, H, ns['load_deep_models'](d, ARCH))
             return ns['MPCController'](B, H, WC, WG, 1.0, forecaster=fc).act
         score(NAME, make, f'MPC + deep {ARCH} forecasts H={H} w_carbon={WC} w_grid={WG}')
+    elif KIND == 'mpcfc':
+        # MPC with any forecaster of make_mpc_controller: gbm | deep_<arch> | gbm+deep_<arch>
+        FC = sys.argv[3]
+        cfg = {'horizon': int(sys.argv[4]) if len(sys.argv) > 4 else 24,
+               'w_carbon': float(sys.argv[5]) if len(sys.argv) > 5 else 1.0,
+               'w_grid': float(sys.argv[6]) if len(sys.argv) > 6 else 3.0, 'forecaster': FC,
+               'scenarios': int(sys.argv[7]) if len(sys.argv) > 7 else 0}
+        make = lambda B, d: ns['make_mpc_controller'](cfg, B, d).act
+        score(NAME, make, f"MPC + {FC} forecasts H={cfg['horizon']} w_carbon={cfg['w_carbon']} w_grid={cfg['w_grid']}"
+              + (f" scenarios={cfg['scenarios']}" if cfg['scenarios'] > 1 else ''))
     elif KIND == 'rltuned':
         # RL-tuned MPC: a trained mpc_tune policy (district-level observations) sets the MPC weights every hour
         from types import SimpleNamespace

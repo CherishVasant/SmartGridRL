@@ -115,6 +115,19 @@ if tr_path.exists():
 p3_path = R / 'phase3' / 'scores.csv'
 if p3_path.exists():
     p3 = pd.read_csv(p3_path).drop_duplicates('name', keep='last')
+    # RL-tuned runs scored for several seeds (P3_RLTUNED_<M>[_s<seed>]): average them into one row per method
+    p3['rl_method'] = p3['name'].str.extract(r'^P3_RLTUNED_(M\d+)')[0]
+    p3['rl_seed'] = p3['name'].str.extract(r'_s(\d+)$')[0].fillna('42')
+    num_cols = [c for c in p3.columns if c.startswith(('train_', 'val_', 'test_')) or c in ('public', 'private')]
+    rl_rows = p3[p3['rl_method'].notna()].groupby('rl_method')
+    merged = rl_rows[num_cols].mean().reset_index()
+    merged['name'] = 'P3_RLTUNED_' + merged['rl_method']
+    merged['label'] = rl_rows['label'].first().values
+    merged['seeds'] = rl_rows['rl_seed'].apply(lambda v: ', '.join(sorted(v, key=int))).values
+    merged['public_std'] = rl_rows['public'].std().values
+    merged['private_std'] = rl_rows['private'].std().values
+    p3 = pd.concat([p3[p3['rl_method'].isna()].assign(seeds='', public_std=np.nan, private_std=np.nan), merged],
+                   ignore_index=True)
     for _, r in p3.iterrows():
         name = 'P3_MPC_g0' if r['name'] == 'NB_cache_dummy' else r['name']
         rl = re.match(r'P3_RLTUNED_(M\d+)', name)
@@ -129,7 +142,8 @@ if p3_path.exists():
         row['phase3_test_cost_C'], row['phase3_test_carbon_G'], row['phase3_test_grid_D'] = r['test_C'], r['test_G'], r['test_D']
         row['PHASE3_PUBLIC_score'], row['PHASE3_PRIVATE_score'] = r['public'], r['private']
         if rl:
-            row['phase3_seed'] = '42'
+            row['PHASE3_PUBLIC_std'], row['PHASE3_PRIVATE_std'] = r['public_std'], r['private_std']
+            row['phase3_seed'] = r['seeds']
 
 # ---- every defined method gets a row (unfinished ones with empty metrics), plus round and status
 import sys
@@ -183,7 +197,7 @@ df = df.iloc[sorted(range(len(df)), key=lambda i: order_key(df['method'].iloc[i]
 first = ['method', 'round', 'status', 'label', 'type', 'deployable', 'env_steps_trained', 'n_seeds',
          'phase1_score_mean', 'phase1_score_std', 'phase3_score_mean', 'phase3_score_std',
          'cost_C', 'carbon_G', 'ramping_R', 'one_minus_load_factor', 'grid_D']
-p3_cols = ['PHASE3_PUBLIC_score', 'PHASE3_PRIVATE_score', 'phase3_train_district_score', 'phase3_val_district_score',
+p3_cols = ['PHASE3_PUBLIC_score', 'PHASE3_PUBLIC_std', 'PHASE3_PRIVATE_score', 'PHASE3_PRIVATE_std', 'phase3_train_district_score', 'phase3_val_district_score',
            'phase3_test_district_score', 'phase3_test_cost_C', 'phase3_test_carbon_G', 'phase3_test_grid_D', 'phase3_seed']
 unseen = ['unseen_val_cost_C', 'unseen_val_carbon_G', 'unseen_val_grid_D', 'unseen_val_phase3_score',
           'public_score_0.4train_0.6val', 'unseen_val_seeds']
@@ -214,7 +228,7 @@ with pd.ExcelWriter(ROOT / 'all_methods_results.xlsx', engine='openpyxl') as xl:
         'no = uses future data (perfect-foresight plan or its imitation): a reference, not a real-world controller',
         'Experiment round (notebooks in code/Round_XX); MPC / Phase III-only controllers have no round',
         'finished, or why there is no result yet (still training / stopped, with the last saved checkpoint)',
-        'Seeds whose results were averaged for the numeric columns (Phase III columns: phase3_seed)']})
+        'Seeds whose results were averaged for the numeric columns (Phase III columns: the seeds in phase3_seed)']})
     notes.to_excel(xl, sheet_name='Column notes', index=False)
     for ws in xl.book.worksheets:
         ws.freeze_panes = 'B2'

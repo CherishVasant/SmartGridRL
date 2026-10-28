@@ -47,9 +47,11 @@ bc_data.npz
 results/
 results_smoke_test/
 01_notebook_pipeline/results/
-colab/*.npz
-colab/*.zip
-colab/deep_forecasters/
+colab/**/*.npz
+colab/**/*.zip
+colab/F1/deep_forecasters/
+colab/F2/total_forecasters/
+colab/F3/total_forecasters/
 04 - Phase 3 Results Summary.md
 05 - Paper Claims.md
 ResearchPaper/*.aux

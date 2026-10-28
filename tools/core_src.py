@@ -535,6 +535,102 @@ METHODS.update({
     'M134_rl_gbm_mpc_200k': dict(_M131, env_steps=200_000, label='RL-tuned LightGBM MPC, 200k env steps'),
     'M135_rl_gbm_mpc_sac': dict(_M131, algo='sac', label='RL-tuned LightGBM MPC with SAC'),
 })
+# Round 29 (seed 42): improve M131 (RL-tuned LightGBM MPC; 3 seeds: Phase III public 0.782, private 0.845)
+_M131_tune = METHODS['M131_rl_tuned_gbm_mpc']['mpc_tune']
+METHODS.update({
+    'M139_rl_mpc_gbm_tuned': dict(_M131, mpc_tune=dict(_M131_tune, forecaster='gbm_tuned'),
+                                  label='RL-tuned MPC with Optuna-tuned LightGBM forecasts (TQC)'),
+    'M140_rl_mpc_h36': dict(_M131, mpc_tune=dict(_M131_tune, horizon=36), label='RL-tuned LightGBM MPC, 36 h horizon'),
+    'M141_rl_mpc_grid3': dict(_M131, mpc_tune=dict(_M131_tune, w_grid=3.0),
+                              label='RL-tuned LightGBM MPC, base ramp weight 3'),
+    'M142_rl_mpc_gbm_gridreward': dict(_M131, mu_fixed={'carbon': 1.0, 'ramp': 1.0, 'peak': 1.0},
+                                       label='RL-tuned LightGBM MPC, reward with equal cost / carbon / grid weights'),
+    'M143_rl_mpc_gamma098': dict(_M131, sac_params={'gamma': 0.98}, label='RL-tuned LightGBM MPC, gamma 0.98'),
+    'M144_rl_mpc_tuned_h36': dict(_M131, mpc_tune=dict(_M131_tune, forecaster='gbm_tuned', horizon=36),
+                                  label='RL-tuned MPC, tuned LightGBM forecasts + 36 h horizon'),
+    'M145_rl_mpc_tuned_grid3': dict(_M131, mpc_tune=dict(_M131_tune, forecaster='gbm_tuned', w_grid=3.0),
+                                    label='RL-tuned MPC, tuned LightGBM forecasts + base ramp weight 3'),
+    'M146_tqc_hist_g098_wear03': dict(METHODS['M123_tqc_hist_gamma098'], w_batt=0.3,
+                                      label='TQC + history, gamma 0.98, battery-wear weight 0.3 (pure RL)'),
+    'M147_tqc_hist_gamma097': dict(METHODS['M123_tqc_hist_gamma098'], sac_params={'gamma': 0.97},
+                                   label='TQC + history, gamma 0.97 (pure RL)'),
+})
+# Round 30 (seed 42): improve M139 / M144 (RL-tuned MPC with the Optuna-tuned LightGBM forecasts; S 0.777 / 0.778)
+_M139_tune = METHODS['M139_rl_mpc_gbm_tuned']['mpc_tune']
+METHODS.update({
+    'M148_rl_mpc_tuned_h48': dict(_M131, mpc_tune=dict(_M139_tune, horizon=48),
+                                  label='RL-tuned MPC, tuned LightGBM forecasts + 48 h horizon'),
+    'M149_rl_mpc_tuned_h36_200k': dict(_M131, env_steps=200_000, mpc_tune=dict(_M139_tune, horizon=36),
+                                       label='RL-tuned MPC, tuned forecasts + 36 h horizon, 200k env steps'),
+    'M150_rl_mpc_tuned_sac': dict(_M131, algo='sac', mpc_tune=_M139_tune,
+                                  label='RL-tuned MPC, tuned LightGBM forecasts, SAC'),
+    'M151_rl_mpc_tuned_h36_score': dict(_M131, mu_fixed={'ramp': 0.5, 'peak': 0.5},
+                                        mpc_tune=dict(_M139_tune, horizon=36),
+                                        label='RL-tuned MPC, tuned forecasts + 36 h horizon, carbon weight 1 reward'),
+    'M152_rl_mpc_tuned_h30': dict(_M131, mpc_tune=dict(_M139_tune, horizon=30),
+                                  label='RL-tuned MPC, tuned LightGBM forecasts + 30 h horizon'),
+    'M153_rl_mpc_tuned_h36_carbon15': dict(_M131, mpc_tune=dict(_M139_tune, horizon=36, w_carbon=1.5),
+                                           label='RL-tuned MPC, tuned forecasts + 36 h horizon, base carbon weight 1.5'),
+    'M154_rl_mpc_tuned_h36_grid15': dict(_M131, mpc_tune=dict(_M139_tune, horizon=36, w_grid=1.5),
+                                         label='RL-tuned MPC, tuned forecasts + 36 h horizon, base ramp weight 1.5'),
+    'M155_rl_mpc_tuned_h36_sac': dict(_M131, algo='sac', mpc_tune=dict(_M139_tune, horizon=36),
+                                      label='RL-tuned MPC, tuned forecasts + 36 h horizon, SAC'),
+})
+# Round 31 (seed 42): the weak KPI is the load factor (M152: ramping 0.82 but 1 - load factor 0.98, almost no peak
+# shaving). The policy gets a 4th action, the MPC's peak-shaving weight (monthly-peak slack, w_peak x 4^a3)
+_M152_tune = METHODS['M152_rl_mpc_tuned_h30']['mpc_tune']
+METHODS.update({
+    'M156_rl_mpc_peak': dict(_M131, mpc_tune=dict(_M152_tune, w_peak=1.0),
+                             label='RL-tuned MPC (M152) + RL-set peak-shaving weight'),
+    'M157_rl_mpc_peak_reward': dict(_M131, mpc_tune=dict(_M152_tune, w_peak=1.0),
+                                    mu_fixed={'carbon': 2.0, 'ramp': 0.5, 'peak': 1.5},
+                                    label='RL-tuned MPC (M152) + RL-set peak weight, reward peak weight 1.5'),
+    'M158_rl_mpc_peak2': dict(_M131, mpc_tune=dict(_M152_tune, w_peak=2.0),
+                              label='RL-tuned MPC (M152) + RL-set peak-shaving weight, base 2'),
+})
+# Round 32 (seed 42): more RL on top of M152 (3 seeds: Phase III public 0.774, private 0.844). Residual RL: besides the
+# MPC weights, the policy adds a district-wide correction to the batteries' MPC action; history: it also sees the past
+# 24 h of district net load and the recent forecast error
+METHODS.update({
+    'M159_rl_mpc_residual': dict(_M131, mpc_tune=dict(_M152_tune, residual=0.25),
+                                 label='RL-tuned MPC (M152) + residual action (up to 25% of capacity)'),
+    'M160_rl_mpc_residual10': dict(_M131, mpc_tune=dict(_M152_tune, residual=0.10),
+                                   label='RL-tuned MPC (M152) + residual action (up to 10% of capacity)'),
+    'M161_rl_mpc_hist': dict(_M131, mpc_tune=dict(_M152_tune, obs_history=True),
+                             label='RL-tuned MPC (M152) + past 24 h net load and recent forecast error in the observation'),
+    'M162_rl_mpc_residual_hist': dict(_M131, mpc_tune=dict(_M152_tune, residual=0.25, obs_history=True),
+                                      label='RL-tuned MPC (M152) + residual action + history observation'),
+    'M163_rl_mpc_residual_hist_sac': dict(_M131, algo='sac', mpc_tune=dict(_M152_tune, residual=0.25, obs_history=True),
+                                          label='RL-tuned MPC (M152) + residual action + history observation, SAC'),
+})
+# Round 33 (seed 42): bigger actor / critic networks (default 64 x 64) on M152, and one on the best pure RL run (M113)
+_M152 = METHODS['M152_rl_mpc_tuned_h30']
+METHODS.update({
+    'M164_rl_mpc_net256': dict(_M152, net_arch=[256, 256], label='RL-tuned MPC (M152), 256 x 256 networks'),
+    'M165_rl_mpc_net512x3': dict(_M152, net_arch=[512, 512, 512], label='RL-tuned MPC (M152), 512 x 512 x 512 networks'),
+    'M166_rl_mpc_net1024': dict(_M152, net_arch=[1024, 1024], label='RL-tuned MPC (M152), 1024 x 1024 networks'),
+    'M167_rl_mpc_net512x3_200k': dict(_M152, net_arch=[512, 512, 512], env_steps=200_000,
+                                      label='RL-tuned MPC (M152), 512 x 512 x 512 networks, 200k env steps'),
+    'M168_tqc_hist_net512x3': dict(METHODS['M113_tqc_hist'], net_arch=[512, 512, 512], env_steps=200_000,
+                                   label='TQC + history (M113), 512 x 512 x 512 networks, 200k env steps (pure RL)'),
+})
+# Round 34 (seed 42): M152 with the district-total forecast averaged from LightGBM and the deep F2 MLP
+# (colab/F2/F2_district_total.ipynb); the best fixed-MPC forecaster on the unseen buildings
+METHODS.update({
+    'M169_rl_mpc_totblend': dict(_M152, mpc_tune=dict(_M152_tune, forecaster='gbm_tuned_tot+deep_mlp'),
+                                 label='RL-tuned MPC (M152) with the LightGBM + deep MLP district-total forecast'),
+    'M170_rl_mpc_totblend_f3': dict(_M152, mpc_tune=dict(_M152_tune, forecaster='gbm_tuned_tot+deep_f3'),
+                                    label='RL-tuned MPC (M152) with the LightGBM + F3 district-total forecast'),
+})
+# Round 28 (seed 42): M131 with the deep forecasters trained on a GPU (colab/F1/F1_deep_forecasters.ipynb, leave-district-out)
+METHODS.update({
+    'M136_rl_mpc_deep_transformer': dict(_M131, mpc_tune=dict(_M131['mpc_tune'], forecaster='deep_transformer'),
+                                         label='RL-tuned MPC with deep Transformer forecasts (TQC)'),
+    'M137_rl_mpc_deep_mlp': dict(_M131, mpc_tune=dict(_M131['mpc_tune'], forecaster='deep_mlp'),
+                                 label='RL-tuned MPC with deep MLP forecasts (TQC)'),
+    'M138_rl_mpc_gbm_mlp_blend': dict(_M131, mpc_tune=dict(_M131['mpc_tune'], forecaster='gbm+deep_mlp'),
+                                      label='RL-tuned MPC with LightGBM + deep MLP blended forecasts (TQC)'),
+})
 RBC_FOLDER = 'B0_RBC'
 
 print(f"Core config loaded. Results folder: {RESULTS_DIR}  |  TOTAL_ENV_STEPS = {TOTAL_ENV_STEPS:,}"
@@ -969,8 +1065,14 @@ class CentralEnv(gym.Env):
             c = self.mpc_cfg
             self.ctrl = make_mpc_controller(c, len(self.env.buildings), 'train')
             self.prev_fc = None
-            self.observation_space = gym.spaces.Box(low=-50.0, high=50.0, shape=(3 * c['horizon'] + 10,), dtype=np.float32)
-            self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(3,), dtype=np.float32)
+            # Round 32: c['obs_history'] adds the past 24 h of district net load and the recent mean |forecast error|
+            self.mpc_hist = []
+            n_obs = 3 * c['horizon'] + 10 + (25 if c.get('obs_history') else 0)
+            self.observation_space = gym.spaces.Box(low=-50.0, high=50.0, shape=(n_obs,), dtype=np.float32)
+            # with c['w_peak'] (Round 31) an action sets the peak-shaving weight: w_peak x 4^a; with c['residual']
+            # (Round 32) a last action adds residual x a (fraction of capacity) to every battery's MPC action
+            n_act = 3 + ('w_peak' in c) + ('residual' in c)
+            self.action_space = gym.spaces.Box(low=-1.0, high=1.0, shape=(n_act,), dtype=np.float32)
         # Residual methods: base action of each simulated step (row t = action that produced step t), from the RBC cache
         # or, with `residual_base`, from another cached controller's eval trace (e.g. a perfect-foresight LP schedule)
         self.rbc_actions = None
@@ -994,8 +1096,12 @@ class CentralEnv(gym.Env):
         if self.mpc_cfg:
             a = np.clip(np.asarray(action, dtype=np.float64), -1.0, 1.0)
             c = self.mpc_cfg
-            return [self.ctrl.decide(w_grid=c['w_grid'] * 4.0 ** a[0], w_carbon=c['w_carbon'] * 2.0 ** a[1],
-                                     term_frac=1.0 + 0.5 * a[2])]
+            act = self.ctrl.decide(w_grid=c['w_grid'] * 4.0 ** a[0], w_carbon=c['w_carbon'] * 2.0 ** a[1],
+                                   term_frac=1.0 + 0.5 * a[2],
+                                   w_peak=c['w_peak'] * 4.0 ** a[3] if 'w_peak' in c else None)
+            if 'residual' in c:
+                act = np.clip(act + c['residual'] * a[-1], -0.78125, 0.78125).astype(np.float32)
+            return [act]
         if self.rbc_actions is None:
             return [action]
         t_next = min(self.env.time_step + 1, len(self.rbc_actions) - 1)   # the step this action will produce
@@ -1058,6 +1164,13 @@ class CentralEnv(gym.Env):
                  np.cos(2 * np.pi * month / 12), float(np.mean(soc)), ctrl.E0 / m, ctrl.base_now / m,
                  ctrl.month_peak / m, err, o[19] / 0.2]
         feats = np.concatenate([ctrl.base_fc / m, ctrl.ci_fc / 0.2, ctrl.price_fc / 0.3, extra])
+        if self.mpc_cfg.get('obs_history'):
+            if t == 0:
+                self.mpc_hist = []
+            self.mpc_hist.append((ctrl.base_now / m, abs(err)))
+            past = [self.mpc_hist[max(len(self.mpc_hist) - 1 - lag, 0)][0] for lag in range(24)]
+            recent_err = float(np.mean([e for _, e in self.mpc_hist[-24:]]))
+            feats = np.concatenate([feats, past, [recent_err]])
         return np.clip(feats, -50, 50).astype(np.float32)
 
     def history_lags(self):
@@ -1275,6 +1388,46 @@ class GBMForecaster(CausalForecaster):
                 rows.append(row)
         return np.array(rows, dtype=np.float32)
 
+    @staticmethod
+    def total_extra(s, temp, t, H):
+        """(H, 11) extra features of the district-total load model (tools/load_lab.py, 'direct_x'): s is the scaled
+        total load (1-D, known up to t), temp the observed temperature."""
+        hs = np.arange(1, H + 1)
+        lag = lambda k: s[max(t - k, 0)]
+        four_weeks = np.stack([s[np.clip(t + hs - 168 * w, 0, t)] for w in range(1, 5)]).mean(0)
+        same_hour_28 = np.stack([s[np.clip(t + hs - 24 * d, 0, t)] for d in range(1, 29)]).mean(0)
+        base = [lag(2), lag(3), lag(6), s[max(t - 2, 0):t + 1].mean(), s[max(t - 5, 0):t + 1].mean(),
+                s[t] - s[max(t - 24, 0)], s[t] - s[max(t - 168, 0)], s[max(t - 23, 0):t + 1].std(),
+                temp[max(t - 23, 0):t + 1].mean()]
+        return np.column_stack([np.tile(base, (H, 1)), four_weeks, same_hour_28])
+
+    def forecast_total_load(self, t):
+        """District-total load for t+1 .. t+H from the direct total model (self.models['load_total'], LightGBM) and/or
+        the deep total models of colab/F2/F2_district_total.ipynb (self.models['load_total_deep']: TorchScript seed
+        ensemble, 24 hours; beyond 24 h the LightGBM total is used). With both, their average."""
+        x = self.load[:t + 1].sum(1, keepdims=True)
+        s = self.scale(x, t)
+        totals = []
+        if 'load_total' in self.models:
+            X = np.hstack([self.features(x, self.weather, self.weather_pred, self.cal, t, self.H),
+                           self.total_extra(x[:, 0] / s[0], self.weather[:, 0], t, self.H)])
+            totals.append(np.maximum(self.models['load_total'].predict(X), 0.0) * s[0])
+        if 'load_total_deep' in self.models:
+            import sys as _sys
+            colab = str(PHASE_DIR / 'colab' / 'F2')
+            if colab not in _sys.path:
+                _sys.path.insert(0, colab)
+            import total_inputs
+            Xd, sd = total_inputs.inputs(x, self.weather, self.weather_pred, self.cal, t)
+            with torch.no_grad():
+                p = np.mean([m(torch.from_numpy(Xd)).numpy()[0] for m in self.models['load_total_deep']], axis=0)
+            deep = np.maximum(p, 0.0) * sd[0]
+            if self.H > len(deep):
+                assert totals, 'a horizon beyond 24 h needs the LightGBM total model as well'
+                deep = np.concatenate([deep, totals[0][len(deep):]])
+            totals.append(deep[:self.H])
+        return np.mean(totals, axis=0)
+
     def forecast(self, t):
         _, ci, price = super().forecast(t)
         out = {}
@@ -1283,18 +1436,23 @@ class GBMForecaster(CausalForecaster):
             ms = self.models[name] if isinstance(self.models[name], list) else [self.models[name]]
             pred = np.mean([m.predict(X) for m in ms], axis=0).reshape(self.H, self.B) * self.scale(x, t)
             out[name] = np.maximum(pred, 0.0)
+        if 'load_total' in self.models or 'load_total_deep' in self.models:
+            # reconcile: rescale the per-building load forecasts so that they add up to the direct total forecast
+            total, parts = self.forecast_total_load(t), out['load'].sum(1)
+            out['load'] = np.where(parts[:, None] > 1e-6, out['load'] * (total / np.maximum(parts, 1e-6))[:, None],
+                                   total[:, None] / self.B)
         return out['load'] - out['solar'], ci, price
 
 
 class DeepForecaster(GBMForecaster):
     """Load / PV forecasts from deep networks (MLP, LSTM or Transformer) trained on a GPU by
-    colab/deep_forecaster_colab.ipynb, leave-district-out like the LightGBM ones, exported as TorchScript and run here on
-    the CPU. Inputs come from colab/deep_inputs.py, the same file the notebook embeds. `models` is a list of loaded
+    colab/F1/F1_deep_forecasters.ipynb, leave-district-out like the LightGBM ones, exported as TorchScript and run here on
+    the CPU. Inputs come from colab/F1/deep_inputs.py, the same file the notebook embeds. `models` is a list of loaded
     TorchScript modules (a seed ensemble, averaged)."""
     def __init__(self, n_buildings, horizon, models, max_steps=9000):
         super().__init__(n_buildings, horizon, None, max_steps)
         import sys as _sys
-        colab = str(PHASE_DIR / 'colab')
+        colab = str(PHASE_DIR / 'colab' / 'F1')
         if colab not in _sys.path:
             _sys.path.insert(0, colab)
         import deep_inputs
@@ -1313,8 +1471,8 @@ class DeepForecaster(GBMForecaster):
 
 
 def load_deep_models(district, arch):
-    """TorchScript seed ensemble from colab/deep_forecasters/ (unzipped from the notebook's deep_forecasters.zip)."""
-    folder = PHASE_DIR / 'colab' / 'deep_forecasters'
+    """TorchScript seed ensemble from colab/F1/deep_forecasters/ (unzipped from F1_deep_forecasters_results.zip)."""
+    folder = PHASE_DIR / 'colab' / 'F1' / 'deep_forecasters'
     paths = sorted(folder.glob(f'{district}_{arch}_s*.pt'))
     assert paths, f'no {district}_{arch} models in {folder}'
     return [torch.jit.load(str(p), map_location='cpu').eval() for p in paths]
@@ -1374,8 +1532,10 @@ class BatteryMPC:
     carbon are weighted like the KPI ratios. Only the first hour of the plan is applied."""
     CAP, PMAX, ETA = 6.4, 5.0, 0.9 ** 0.5
 
-    def __init__(self, n_buildings, horizon, w_carbon=1.0, w_grid=0.0, term_frac=1.0, w_peak=0.0):
+    def __init__(self, n_buildings, horizon, w_carbon=1.0, w_grid=0.0, term_frac=1.0, w_peak=0.0, eta=None):
         import scipy.sparse as sp
+        if eta is not None:                  # one-way efficiency of the LP's battery model (default sqrt(0.9))
+            self.ETA = eta
         self.B, self.H, self.w_carbon, self.w_grid, self.term_frac = n_buildings, horizon, w_carbon, w_grid, term_frac
         self.w_peak = w_peak
         self.has_ramp, self.has_peak = w_grid > 0, w_peak > 0   # LP structure is fixed; weights may change per call
@@ -1433,6 +1593,14 @@ class BatteryMPC:
     def plan(self, base, ci, price, soc0, E0, scales, peak_ref=0.0, mean_load=1.0):
         """Target state of charge (kWh) of each battery after the next hour."""
         from scipy.optimize import linprog
+        cost, b_ub, b_eq = self.lp_pieces(base, ci, price, soc0, E0, scales, peak_ref, mean_load)
+        res = linprog(cost, A_ub=self.A_ub, b_ub=b_ub, A_eq=self.A_eq, b_eq=b_eq, bounds=self.bounds, method='highs')
+        if res.status != 0:
+            return soc0
+        return res.x[self.isoc[:, 0]]
+
+    def lp_pieces(self, base, ci, price, soc0, E0, scales, peak_ref=0.0, mean_load=1.0):
+        """Objective and right-hand sides of the LP for one forecast of the district base load."""
         B, H = self.B, self.H
         c_s, g_s, r_s = scales
         u = price / c_s + self.w_carbon * ci / g_s
@@ -1453,34 +1621,155 @@ class BatteryMPC:
         taper[:, 0] -= 4 * self.PMAX / self.CAP * soc0
         b_ub += [taper.ravel(), taper.ravel()]
         b_eq = np.zeros(B * H); b_eq[np.arange(B) * H] = soc0
-        res = linprog(cost, A_ub=self.A_ub, b_ub=np.concatenate(b_ub), A_eq=self.A_eq, b_eq=b_eq,
-                      bounds=self.bounds, method='highs')
+        return cost, np.concatenate(b_ub), b_eq
+
+
+class ScenarioMPC(BatteryMPC):
+    """Two-stage stochastic version of BatteryMPC: K forecasts of the district base load (the point forecast plus K-1
+    past forecast errors), one battery plan per scenario, the first hour's charge / discharge shared by all of them
+    (non-anticipativity), and the mean objective over the scenarios. Only the shared first hour is applied, so the
+    action hedges against the forecast errors instead of trusting the point forecast."""
+
+    def __init__(self, n_buildings, horizon, w_carbon=1.0, w_grid=0.0, term_frac=1.0, w_peak=0.0, scenarios=8):
+        import scipy.sparse as sp
+        super().__init__(n_buildings, horizon, w_carbon, w_grid, term_frac, w_peak)
+        K, B, n = scenarios, n_buildings, self.nv
+        self.K = K
+        self.A_ub_K = sp.block_diag([self.A_ub] * K, format='csr')
+        na_r, na_c, na_v = [], [], []                 # ch / dis of hour 0 equal to scenario 0's
+        row = 0
+        for k in range(1, K):
+            for arr in (self.ich, self.idis):
+                for b in range(B):
+                    na_r += [row, row]; na_c += [k * n + arr[b, 0], arr[b, 0]]; na_v += [1.0, -1.0]
+                    row += 1
+        self.n_na = row
+        self.A_eq_K = sp.vstack([sp.block_diag([self.A_eq] * K, format='csr'),
+                                 sp.csr_matrix((na_v, (na_r, na_c)), shape=(row, K * n))], format='csr')
+        self.bounds_K = np.tile(self.bounds, (K, 1))
+
+    def plan_scenarios(self, bases, ci, price, soc0, E0, scales, peak_ref=0.0, mean_load=1.0):
+        """bases: (K, H) district base-load scenarios (row 0 = the point forecast). Target SoC after the next hour."""
+        from scipy.optimize import linprog
+        parts = [self.lp_pieces(b, ci, price, soc0, E0, scales, peak_ref, mean_load) for b in bases]
+        cost = np.concatenate([p[0] for p in parts]) / len(bases)
+        b_ub = np.concatenate([p[1] for p in parts])
+        b_eq = np.concatenate([p[2] for p in parts] + [np.zeros(self.n_na)])
+        res = linprog(cost, A_ub=self.A_ub_K, b_ub=b_ub, A_eq=self.A_eq_K, b_eq=b_eq, bounds=self.bounds_K,
+                      method='highs')
         if res.status != 0:
-            return soc0
+            return self.plan(bases[0], ci, price, soc0, E0, scales, peak_ref, mean_load)
         return res.x[self.isoc[:, 0]]
+
+
+class ErrorBank:
+    """Past out-of-sample forecast errors of the district net load (tools/error_bank.py), relative to the past-week
+    mean district load; scenarios for hour of day `hour` are drawn from errors of forecasts made at that hour."""
+
+    def __init__(self, district, k, seed=0):
+        d = np.load(PHASE_DIR / 'results' / 'forecast' / 'error_bank' / f'{district}.npz')
+        self.errors, self.hours, self.k = d['errors'], d['hours'], k
+        self.by_hour = {h: np.flatnonzero(self.hours == h) for h in range(1, 25)}
+        self.rng = np.random.default_rng(seed)
+
+    def scenarios(self, point, hour, scale):
+        """(k, H) scenarios: the point forecast, then the point forecast plus k-1 sampled past errors."""
+        idx = self.rng.choice(self.by_hour[int(hour)], self.k - 1, replace=False)
+        return np.vstack([point, point + self.errors[idx, :len(point)] * scale])
+
+
+class AverageForecaster:
+    """Equal-weight average of several forecasters' net-load forecasts (carbon intensity and price from the first).
+    Each member keeps its own history; update / forecast are forwarded to all of them."""
+    def __init__(self, members):
+        self.members = members
+
+    def update(self, t, o):
+        for m in self.members:
+            m.update(t, o)
+
+    def forecast(self, t):
+        outs = [m.forecast(t) for m in self.members]
+        return np.mean([o[0] for o in outs], axis=0), outs[0][1], outs[0][2]
 
 
 def make_mpc_controller(cfg, n_buildings, district):
     """MPCController for an `mpc_tune` config; with cfg['forecaster'] == 'gbm' it uses the LightGBM forecasters of
     tools/forecast_lab.py for that district (trained only on the other districts' buildings)."""
     fc = None
-    if cfg.get('forecaster') == 'gbm':
+    fname = cfg.get('forecaster', '')
+    if fname in ('gbm', 'gbm_tuned', 'gbm_tuned_tot') or fname.startswith(('gbm_tuned_totdeep_', 'gbm_tuned_tot+deep_')):
+        # gbm_tuned: the Optuna-tuned models of tools/tune_forecaster.py (nested leave-district-out); a series not tuned
+        # yet for this district falls back to the default model
+        # gbm_tuned_tot: as gbm_tuned, with the per-building load forecasts rescaled to the direct district-total
+        # model of tools/load_lab.py (trained on pseudo-districts of the other districts' buildings)
+        # gbm_tuned_totdeep_<arch>: as gbm_tuned_tot with the deep total model of colab/F2/F2_district_total.ipynb instead
+        # gbm_tuned_tot+deep_<arch>: the average of the LightGBM and the deep total models
         import lightgbm as lgb
-        folder = PHASE_DIR / 'results' / 'forecast'
-        models = {n: lgb.Booster(model_file=str(folder / f'{district}_{n}.txt')) for n in ['load', 'solar']}
+        base, tuned = PHASE_DIR / 'results' / 'forecast', PHASE_DIR / 'results' / 'forecast' / 'tuned'
+        models = {}
+        for n in ['load', 'solar']:
+            path = tuned / f'{district}_{n}.txt'
+            if fname == 'gbm' or not path.exists():
+                path = base / f'{district}_{n}.txt'
+            models[n] = lgb.Booster(model_file=str(path))
+        # (with the deep model alone, the LightGBM total covers only the hours beyond its 24)
+        if fname == 'gbm_tuned_tot' or fname.startswith('gbm_tuned_tot+deep_') or \
+                (fname.startswith('gbm_tuned_totdeep_') and cfg['horizon'] > 24):
+            models['load_total'] = lgb.Booster(model_file=str(base / 'load_lab' / f'{district}_total_direct_x.txt'))
+        if 'deep_' in fname:
+            # <arch> may join several with '+' (e.g. 'mlp+f3'): one deep ensemble of all their seeds; 'f3' is the
+            # Optuna-searched model of colab/F3/F3_automl_total.ipynb (same inputs as F2)
+            paths = []
+            for arch in fname.split('deep_')[1].split('+'):
+                folder = PHASE_DIR / 'colab' / ('F3' if arch == 'f3' else 'F2') / 'total_forecasters'
+                found = sorted(folder.glob(f"{district}_{arch}_s*.pt"))
+                assert found, f'no {district} {arch} total models in {folder}'
+                paths += found
+            models['load_total_deep'] = [torch.jit.load(str(p), map_location='cpu').eval() for p in paths]
         fc = GBMForecaster(n_buildings, cfg['horizon'], models)
     elif cfg.get('forecaster', '').startswith('deep_'):             # e.g. 'deep_mlp', 'deep_lstm', 'deep_transformer'
         fc = DeepForecaster(n_buildings, cfg['horizon'], load_deep_models(district, cfg['forecaster'][5:]))
-    return MPCController(n_buildings, cfg['horizon'], cfg['w_carbon'], cfg['w_grid'], 1.0, forecaster=fc)
+    elif cfg.get('forecaster', '').startswith('gbm+deep_'):         # e.g. 'gbm+deep_mlp': 50/50 average of the two
+        import lightgbm as lgb
+        folder = PHASE_DIR / 'results' / 'forecast'
+        models = {n: lgb.Booster(model_file=str(folder / f'{district}_{n}.txt')) for n in ['load', 'solar']}
+        fc = AverageForecaster([GBMForecaster(n_buildings, cfg['horizon'], models),
+                                DeepForecaster(n_buildings, cfg['horizon'],
+                                               load_deep_models(district, cfg['forecaster'].split('deep_')[1]))])
+    # cfg['scenarios'] = K > 1: scenario MPC with K scenarios from the district's forecast-error bank
+    bank = ErrorBank(district, cfg['scenarios']) if cfg.get('scenarios', 0) > 1 else None
+    return MPCController(n_buildings, cfg['horizon'], cfg['w_carbon'], cfg['w_grid'], 1.0, cfg.get('w_peak', 0.0),
+                         forecaster=fc, bank=bank, exact_eff=cfg.get('exact_eff', False), eta=cfg.get('eta'))
+
+
+# CityLearn 2022 battery (identical in every building): efficiency vs |power| / nominal power (5 kW), linear in between;
+# the stored energy changes by grid energy x sqrt(efficiency) when charging, / sqrt(efficiency) when discharging
+EFF_CURVE = (np.array([0.0, 0.3, 0.7, 0.8, 1.0]), np.array([0.83, 0.83, 0.9, 0.9, 0.85]))
+
+
+def battery_energy_for(delta, nominal_power=5.0):
+    """Grid-side energy (kWh, per battery) that changes the stored energy by `delta` kWh in CityLearn: solves
+    e * sqrt(eff(e)) = delta (charging) or e / sqrt(eff(e)) = delta (discharging) by fixed-point iteration."""
+    delta = np.asarray(delta, dtype=np.float64)
+    e = np.where(delta >= 0, delta / 0.9 ** 0.5, delta * 0.9 ** 0.5)
+    for _ in range(8):
+        root = np.sqrt(np.interp(np.abs(e) / nominal_power, *EFF_CURVE))
+        e = np.where(delta >= 0, delta / root, delta * root)
+    return e
 
 
 class MPCController:
     """Causal forecaster + BatteryMPC, driven by the central observation once per simulated step. `act` returns the
     CityLearn action (fraction of capacity, grid side) that moves each battery to the MPC's target state of charge."""
     def __init__(self, n_buildings, horizon=24, w_carbon=1.0, w_grid=0.0, term_frac=1.0, w_peak=0.0, solar_model=False,
-                 forecaster=None):
+                 forecaster=None, bank=None, exact_eff=False, eta=None):
+        # bank: an ErrorBank -> scenario MPC (ScenarioMPC with bank.k scenarios); None -> deterministic BatteryMPC
+        # exact_eff (Round 33): convert the target SoC into an action with CityLearn's power-dependent efficiency
+        # curve instead of the LP's constant one; eta: the LP's one-way efficiency
         self.fc = forecaster if forecaster is not None else CausalForecaster(n_buildings, horizon, solar_model=solar_model)
-        self.mpc = BatteryMPC(n_buildings, horizon, w_carbon, w_grid, term_frac, w_peak)
+        self.bank, self.exact_eff = bank, exact_eff
+        self.mpc = BatteryMPC(n_buildings, horizon, w_carbon, w_grid, term_frac, w_peak, eta) if bank is None else             ScenarioMPC(n_buildings, horizon, w_carbon, w_grid, term_frac, w_peak, scenarios=bank.k)
         self.B = n_buildings
         self.sums = np.zeros(3); self.n = 0; self.prev_base = None
         self.month_peak, self.month_sum, self.month_n = 0.0, 0.0, 0
@@ -1508,20 +1797,32 @@ class MPCController:
         self.base_fc = base.sum(axis=1)
         self.E0, self.base_now = E_now, base_now
         self.soc0 = np.asarray(soc_frac, dtype=np.float64) * BatteryMPC.CAP
+        if self.bank is not None:
+            self.hour = o[2]
+            self.load_scale = self.fc.load[max(t - 167, 0):t + 1].sum(axis=1).mean() + 0.05
 
-    def decide(self, w_grid=None, w_carbon=None, term_frac=None):
+    def decide(self, w_grid=None, w_carbon=None, term_frac=None, w_peak=None):
         """CityLearn actions from the MPC plan; the weights default to the controller's own (RL can override them)."""
         m = self.mpc
-        saved = (m.w_grid, m.w_carbon, m.term_frac)
+        saved = (m.w_grid, m.w_carbon, m.term_frac, m.w_peak)
         m.w_grid = saved[0] if w_grid is None else w_grid
         m.w_carbon = saved[1] if w_carbon is None else w_carbon
         m.term_frac = saved[2] if term_frac is None else term_frac
+        m.w_peak = saved[3] if w_peak is None else w_peak
         soc0 = self.soc0
-        target = m.plan(self.base_fc, self.ci_fc, self.price_fc, soc0, self.E0, self.scales, peak_ref=self.month_peak,
-                        mean_load=self.month_sum / self.month_n)
-        m.w_grid, m.w_carbon, m.term_frac = saved
+        if self.bank is None:
+            target = m.plan(self.base_fc, self.ci_fc, self.price_fc, soc0, self.E0, self.scales,
+                            peak_ref=self.month_peak, mean_load=self.month_sum / self.month_n)
+        else:
+            bases = self.bank.scenarios(self.base_fc, self.hour, self.load_scale)
+            target = m.plan_scenarios(bases, self.ci_fc, self.price_fc, soc0, self.E0, self.scales,
+                                      peak_ref=self.month_peak, mean_load=self.month_sum / self.month_n)
+        m.w_grid, m.w_carbon, m.term_frac, m.w_peak = saved
         delta = target - soc0
-        energy = np.where(delta >= 0, delta / BatteryMPC.ETA, delta * BatteryMPC.ETA)
+        if self.exact_eff:
+            energy = battery_energy_for(delta)
+        else:
+            energy = np.where(delta >= 0, delta / m.ETA, delta * m.ETA)
         return np.clip(energy / BatteryMPC.CAP, -0.78125, 0.78125).astype(np.float32)
 
 

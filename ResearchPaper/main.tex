@@ -40,11 +40,15 @@ carbon emissions by 18.3\% relative to no battery over three seeds, whereas a ru
 agent are no better than idling; Truncated Quantile Critics (TQC) with past-only history features reaches a Phase~I score of
 $0.763 \pm 0.005$. Pure RL, however, plateaus at a Phase~III public score of 0.853. Following the challenge winners, we
 then combine leakage-free LightGBM load and PV forecasts, a receding-horizon linear-programming controller (MPC) and an RL
-agent that retunes the MPC's weights every hour. This \emph{RL-tuned MPC} reduces cost by 33.6\% and emissions by 21.7\%
+agent that retunes the MPC's weights every hour. This \emph{RL-tuned MPC} reduces cost by 34.3\% and emissions by 22.2\%
 on the training buildings and, evaluated with the official Phase~III formulas on all 17 challenge buildings, reaches a
-public score of 0.782 and a private score of 0.845 (between 7th and 8th place; winner 0.728). Its carbon KPI of 0.769 is
-the lowest of all published Phase~III entries (best 0.803). Load forecasting is the main remaining limit: with perfect
-net-load forecasts the same MPC would score 0.633.
+public score of $0.774 \pm 0.003$ and a private score of $0.844 \pm 0.004$ over three seeds (8th among the 42 public
+leaderboard entries; winner 0.728). Its carbon KPI of 0.764 is the lowest of all 42 entries (best 0.803), and each of its
+private-leaderboard KPIs is better than the participants' median. Load forecasting is the main remaining limit: with
+perfect net-load forecasts the same MPC would score 0.633, and only the district's total load over the next hours
+matters. Deep district-total forecasters, found by an automated search on a GPU and trained on random groups of
+buildings from the other districts, raise that forecast's accuracy by 1--2 points and give a plain MPC the best private
+score of the study (0.839).
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -93,11 +97,15 @@ forecasting, optimisation and RL. Our contributions are:
   \item An \emph{RL-tuned MPC}: leakage-free LightGBM forecasts (trained only on buildings outside the controlled
         district) drive a receding-horizon linear program whose weights an RL agent retunes every hour from district-level
         features, so one policy runs on districts of any size. Evaluated with the official Phase~III formulas on all 17
-        challenge buildings it scores 0.782 (public) and 0.845 (private), with the lowest carbon KPI of all published
-        entries.
+        challenge buildings it scores $0.774 \pm 0.003$ (public) and $0.844 \pm 0.004$ (private) over three seeds,
+        with the lowest carbon KPI of all 42 entries on the public leaderboard.
   \item Ablations and negative results (reward normalisation, decentralised agents, residual learning on a rule-based
         controller, larger networks, longer training, forecast blending), a generalisation test on unseen buildings, and
-        an analysis showing that net-load forecasting is the main remaining limit.
+        an analysis showing that net-load forecasting, specifically of the district total over the next few hours, is the
+        main remaining limit.
+  \item Leakage-free district-total forecasters: LightGBM and deep models trained on \emph{pseudo-districts} (random
+        groups of the other districts' buildings), including an automated search over five deep model families; with
+        them a plain MPC reaches the best private score of the study.
 \end{enumerate}
 
 The remainder of the paper is organised as follows. Section~\ref{sec:related} surveys related work.
@@ -263,6 +271,23 @@ $0.8^h$ over the horizon; prices repeat the same hour one week earlier. The \emp
 calendar, the current weather and the environment's own weather forecasts for the target hour. All value features are
 divided by the building's mean absolute value over the past week, so a model trained on some buildings applies to others,
 and the model used for a district is trained only on the buildings of the other two districts (leave-district-out).
+In the \emph{tuned} variant, the LightGBM hyperparameters are chosen with Optuna \cite{akiba2019optuna} by
+cross-validation between those two districts, so the controlled district is not used for tuning either.
+
+\emph{District-total forecasters.} The grid KPIs depend on the district's total load, which is far more predictable
+than any single building's (Section~\ref{sec:fcvalue}). We therefore also forecast that total directly for the next
+24 hours and rescale the per-building load forecasts so that they add up to it. The direct models are trained on
+\emph{pseudo-districts}: random groups of the other two districts' buildings, redrawn during training, so that a model
+sees many districts of different sizes and is never trained on the district it forecasts. The deep models' inputs are
+the past two weeks of the total and its same-hour means over the past four weeks, both divided by the total's mean over
+the past week, the weather, the forecasts of it already issued for the next 24 hours, and the calendar. Three kinds of
+models are compared: a LightGBM model, deep
+models trained on a GPU (F2: an MLP and a patch Transformer), and the result of an automated search (F3): Optuna
+\cite{akiba2019optuna}, 30 trials per district, over five families (an MLP with learned hour and weekday embeddings, a GRU,
+a temporal convolutional network, N-BEATS and PatchTST) and their hyperparameters, chosen by cross-validation between the
+two other districts (fit on pseudo-districts of one, scored on the real total of the other), with the next six hours
+weighted more in the loss. The chosen configuration is trained with three seeds whose forecasts are averaged. The MPC
+uses the mean of the LightGBM and the deep total forecasts.
 
 \emph{MPC.} Given the forecast net load $\hat B_h$ of the district (load minus PV), prices $\hat\pi_h$ and carbon
 intensities $\hat I_h$, the MPC solves the linear program
@@ -619,7 +644,10 @@ forecasts improve it to 0.789. Letting RL retune the MPC's weights every hour ad
 MPC: the RL-tuned MPC lowers the cost to 0.664 and carbon to 0.783 on the training buildings and reaches public 0.782
 and private 0.845; TQC (M131) and SAC (M135) give the same result, and a carbon weight of 1 in its reward (M133) changes
 nothing. On the seasonal forecasts, the RL tuning helps on the training buildings but not on the unseen ones (M129, public
-0.807): the agent learns weight choices specific to the training buildings when the forecasts are poor.
+0.807): the agent learns weight choices specific to the training buildings when the forecasts are poor. With the tuned
+LightGBM forecasters, whose PV accuracy rises from about 90\% to 96\% while the load accuracy is unchanged, and a 30-hour
+horizon, the RL-tuned MPC (M152, TQC) reaches public $0.774 \pm 0.003$ and private $0.844 \pm 0.004$ over three seeds,
+our best result; with SAC and a 36-hour horizon (M155) it scores $0.775 \pm 0.001$ and $0.845 \pm 0.003$.
 
 To measure how much better forecasting could still give, we ran the same MPC (ramp weight 2) on the training buildings with
 its net-load forecast replaced by the true net load plus $k$ times the seasonal forecast's error: $S$ = 0.811, 0.761,
@@ -627,10 +655,73 @@ its net-load forecast replaced by the true net load plus $k$ times the seasonal 
 the future and is only an upper bound: it shows that net-load forecasting, not the optimiser or the RL, is the main
 remaining limit.
 
+\subsection{District-Total Forecasting}\label{sec:fcvalue}
+Which forecast errors cost score? With the LightGBM MPC (ramp weight 3; $S$ = 0.784 on the training and 0.779 on the
+validation buildings), replacing the forecasts by the true future one part at a time gives: perfect PV $S$ = 0.782 and
+0.776, i.e.\ almost nothing; perfect load 0.648 and 0.648; perfect district total only (the per-building forecasts
+rescaled to the true total) 0.649 and 0.648; and the true load for only the next six hours 0.659 and 0.651. Almost the
+whole value of better forecasts therefore lies in the district's total load over the next few hours, not in the split
+between buildings or in PV. That total is also much easier to forecast: the per-building LightGBM forecasts are about
+58\% accurate (one minus the mean absolute error over the mean load) on the training buildings, their sum 75\%, because
+the buildings' unpredictable fluctuations partly cancel.
+
+Table~\ref{tab:totacc} compares the district-total forecasters on each district, none of them trained on the district it
+forecasts. All direct models beat the sum of the per-building forecasts by 1--2 points; the best LightGBM variant, F2 and
+F3 lie within one point of each other. The automated search chose the embedding MLP for every district, and its five
+best configurations scored within 0.1 points of each other, which suggests that about 78\% (72\% on the validation
+district) is close to what these inputs allow.
+
+Table~\ref{tab:totmpc} shows the effect on control. In the plain MPC, the F2 and F3 total forecasts lower the private
+score from 0.846 to 0.840 and 0.839 and the score on the seven test buildings from 0.910 to 0.902--0.903, mostly through
+the grid KPI; with F3 the public score of 0.7745 equals that of the RL-tuned M152. Averaging F2 and F3 adds nothing.
+Combined with the RL-tuned MPC, however, the better forecasts do not add up with the RL tuning: M169 (F2) and M170 (F3)
+score public 0.776 and 0.773 and private 0.841, the same as M152 on the same seed. The agent improves the
+fixed-weight MPC mainly by correcting for the weaknesses of the forecasts it was trained with, and that margin shrinks as
+the forecasts improve.
+
+\begin{table}[!t]
+\centering
+\caption{District-total load forecast accuracy over the next 24 hours (1 $-$ MAE / mean, \%), leave-district-out.}
+\label{tab:totacc}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+District & LightGBM, sum of buildings & LightGBM, direct (best) & F2 (deep) & F3 (searched) \\
+\midrule
+Train (1--5)       & 75.0 & \textbf{77.8} & 76.8 & 77.2 \\
+Validation (6--10) & 70.6 & \textbf{72.4} & 72.1 & 71.6 \\
+Test (11--17)      & 77.5 & \textbf{79.8} & 79.0 & 78.7 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+\begin{table}[!t]
+\centering
+\caption{Controllers with the district-total forecasts (seed 42). Phase~I and $S$ on the training buildings, $S$ on the
+seven unseen test buildings, and the Phase~III public and private scores (lower is better).}
+\label{tab:totmpc}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}llccccc@{}}
+\toprule
+ID & Controller & Phase I & $S$ & Test $S$ & Public & Private \\
+\midrule
+--   & MPC, LightGBM                & 0.742 & 0.784 & 0.910 & 0.781 & 0.846 \\
+--   & MPC, LightGBM + F2 total     & 0.731 & 0.778 & \textbf{0.902} & 0.778 & 0.840 \\
+--   & MPC, LightGBM + F3 total     & 0.729 & \textbf{0.775} & 0.903 & 0.7745 & \textbf{0.839} \\
+--   & MPC, LightGBM + F2 + F3 total & 0.730 & 0.777 & \textbf{0.902} & 0.776 & \textbf{0.839} \\
+\midrule
+M152 & RL-tuned MPC, LightGBM       & \textbf{0.715} & 0.778 & 0.909 & \textbf{0.772} & 0.841 \\
+M169 & RL-tuned MPC, + F2 total     & 0.722 & 0.776 & 0.906 & 0.776 & 0.841 \\
+M170 & RL-tuned MPC, + F3 total     & 0.716 & \textbf{0.774} & 0.910 & 0.773 & 0.841 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
 \begin{table}[!t]
 \centering
 \caption{MPC and RL-tuned MPC. Phase~I, $S$, $C$, $G$, $D$ on the training buildings; Phase~III public and private scores
-over all 17 buildings (lower is better). RL-tuned controllers: seed 42.}
+over all 17 buildings (lower is better). RL-tuned controllers: seed 42, except M152 and M155 (mean of seeds 42, 100
+and 2026).}
 \label{tab:mpc}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}llccccccc@{}}
@@ -641,10 +732,12 @@ ID & Controller & Phase I & $S$ & $C$ & $G$ & $D$ & Public & Private \\
 --   & MPC, seasonal, ramp weight 2     & 0.745 & 0.811 & 0.691 & 0.798 & 0.944 & 0.808 & 0.856 \\
 --   & MPC, LightGBM, ramp weight 3     & 0.745 & 0.792 & 0.706 & 0.785 & \textbf{0.886} & 0.789 & 0.848 \\
 \midrule
-M129 & RL-tuned MPC, seasonal (TQC)     & 0.728 & 0.808 & \textbf{0.663} & 0.793 & 0.970 & 0.807 & 0.864 \\
-M131 & RL-tuned MPC, LightGBM (TQC)     & \textbf{0.723} & 0.787 & 0.664 & \textbf{0.783} & 0.914 & \textbf{0.782} & 0.845 \\
-M135 & RL-tuned MPC, LightGBM (SAC)     & 0.724 & \textbf{0.786} & 0.665 & \textbf{0.783} & 0.909 & \textbf{0.782} & \textbf{0.844} \\
-M133 & M131, carbon weight 1 in reward  & 0.727 & \textbf{0.786} & 0.669 & 0.784 & 0.905 & -- & -- \\
+M129 & RL-tuned MPC, seasonal (TQC)     & 0.728 & 0.808 & 0.663 & 0.793 & 0.970 & 0.807 & 0.864 \\
+M131 & RL-tuned MPC, LightGBM (TQC)     & 0.723 & 0.787 & 0.664 & 0.783 & 0.914 & 0.782 & 0.845 \\
+M135 & RL-tuned MPC, LightGBM (SAC)     & 0.724 & 0.786 & 0.665 & 0.783 & 0.909 & 0.782 & \textbf{0.844} \\
+M133 & M131, carbon weight 1 in reward  & 0.727 & 0.786 & 0.669 & 0.784 & 0.905 & -- & -- \\
+M152 & tuned LightGBM, 30 h (TQC)       & 0.717 & \textbf{0.778} & 0.657 & \textbf{0.778} & 0.900 & \textbf{0.774} & \textbf{0.844} \\
+M155 & tuned LightGBM, 36 h (SAC)       & \textbf{0.715} & \textbf{0.778} & \textbf{0.653} & \textbf{0.778} & 0.904 & 0.775 & 0.845 \\
 \midrule
 M113 & best pure RL (TQC), 3 seeds      & 0.763 & 0.862 & 0.709 & 0.816 & 1.060 & 0.854 & -- \\
 \bottomrule
@@ -652,24 +745,33 @@ M113 & best pure RL (TQC), 3 seeds      & 0.763 & 0.862 & 0.709 & 0.816 & 1.060 
 \end{table}
 
 \subsection{Comparison with the Challenge Leaderboard}
-Table~\ref{tab:leader} places our best deployable controller in the published Phase~III public leaderboard
-\cite{citylearn2022challenge}, whose values are blends of the training and validation districts; for our row the same
-0.4/0.6 blend of $C$, $G$ and $D$ is shown. The RL-tuned MPC scores 0.782, between the 7th (0.767) and 8th (0.789)
-entries; the winner reached 0.728. Per KPI (Table~\ref{tab:kpirank}), its carbon of 0.769 is lower than that of every
-published entry (best 0.803), its cost of 0.661 would rank about 5th, and the gap to the top lies almost entirely in the
-grid KPI ($D$ 0.916 vs.\ 0.738 for the winner): our reward weights carbon twice as much as cost and trades some grid
-smoothness for emissions. Two differences favour the published entries: they trained their forecasters on the public
-buildings that make up 40\% of the public score, which ours never see, and their scores come from the official evaluator.
+Table~\ref{tab:leader} places our best deployable controller in the Phase~III public leaderboard
+\cite{citylearn2022challenge}, which lists all 42 entries with their $C$, $G$ and $D$; these are blends of the training
+and validation districts, and for our row the same 0.4/0.6 blend is shown (mean of three seeds). The RL-tuned MPC (M152)
+scores 0.774, between the 7th (0.767) and 8th (0.789) entries; the winner reached 0.728. Per KPI
+(Table~\ref{tab:kpirank}), its carbon of 0.764 is lower than that of all 42 entries (best 0.803), its cost of 0.655
+ranks 4th, and the gap to the top lies almost entirely in the grid KPI ($D$ 0.902, 14th; 0.738 for the winner). Our
+reward weights carbon twice as much as cost and trades some grid smoothness for emissions, so the carbon rank reflects
+this trade-off as much as the controller's quality. Two differences favour the published entries: they trained their
+forecasters on the public buildings that make up 40\% of the public score, which ours never see, and their scores come
+from the official evaluator.
+
+The private leaderboard, which adds the seven test buildings and decided the winners, was visible only to the organisers,
+and its per-team KPIs are not published; the challenge overview reports only the participants' medians, $C = 0.792$,
+$G = 0.940$, $D = 0.996$ and score 0.907 \cite{nweye2023challenge}. With the same private weights (0.2/0.3/0.5), M152
+reaches $C = 0.728$, $G = 0.861$, $D = 0.942$ and a score of 0.844, better than the median on every KPI; whether its
+carbon is also the lowest on the private leaderboard cannot be checked.
 
 On the Phase~I leaderboard ($(C+G)/2$ on the public training buildings) the best entries scored 0.631, 0.635 and 0.651;
-the RL-tuned MPC's 0.723 would rank 6th and the best pure RL (0.763) 11th. Phase~I was scored on the same public year the
-teams received in full, so optimisation on that year's actual data was possible: the runner-up used dynamic programming on
+the RL-tuned MPC's 0.717 (M152) would rank 5th and the best pure RL (0.763) 11th. Phase~I was scored on the same public
+year the teams received in full, so optimisation on that year's actual data was possible: the runner-up used dynamic programming on
 it in Phase~I \cite{nweye2023challenge}. Phase~III, with buildings no team had seen, is the fair comparison for a deployable
 controller.
 
 \begin{table}[!t]
 \centering
-\caption{Phase~III public leaderboard (top 8 of the published entries) with our best deployable controller.}
+\caption{Phase~III public leaderboard (top 8 of the 42 entries) with our best deployable controller (M152, mean of three
+seeds).}
 \label{tab:leader}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}clcccc@{}}
@@ -683,7 +785,7 @@ Rank & Team & Score & $C$ & $G$ & $D$ \\
 5 & Orca               & 0.760 & 0.659 & 0.836 & 0.784 \\
 6 & Greener            & 0.764 & 0.663 & 0.821 & 0.809 \\
 7 & DivMARL            & 0.767 & 0.653 & 0.805 & 0.842 \\
--- & \textit{Ours: RL-tuned MPC (M131)} & \textit{0.782} & \textit{0.661} & \textbf{\textit{0.769}} & \textit{0.916} \\
+-- & \textit{Ours: RL-tuned MPC (M152)} & \textit{0.774} & \textit{0.655} & \textbf{\textit{0.764}} & \textit{0.902} \\
 8 & SCRG\_UA           & 0.789 & 0.666 & 0.880 & 0.820 \\
 \bottomrule
 \end{tabular}}
@@ -691,17 +793,18 @@ Rank & Team & Score & $C$ & $G$ & $D$ \\
 
 \begin{table}[!t]
 \centering
-\caption{Where the RL-tuned MPC would rank on each KPI of the Phase~III public leaderboard.}
+\caption{Where the RL-tuned MPC (M152) would rank on each KPI among the 42 entries of the Phase~III public
+leaderboard.}
 \label{tab:kpirank}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lccl@{}}
 \toprule
-KPI & Ours (M131) & Best published & Rank \\
+KPI & Ours (M152) & Best of 42 entries & Rank \\
 \midrule
-Carbon $G$ & \textbf{0.769} & 0.803 (ambitiousengineers) & \textbf{1st} ($-4\%$ vs.\ the best entry) \\
-Cost $C$   & 0.661 & 0.639 (Together) & about 5th \\
-Grid $D$   & 0.916 & 0.738 (Together) & below the top 10 \\
-Overall    & 0.782 & 0.728 (Together) & between 7th and 8th \\
+Carbon $G$ & \textbf{0.764} & 0.803 (ambitiousengineers) & \textbf{1st} ($-5\%$ vs.\ the best entry) \\
+Cost $C$   & 0.655 & 0.639 (Together) & 4th \\
+Grid $D$   & 0.902 & 0.738 (Together) & 14th \\
+Overall    & 0.774 & 0.728 (Together) & between 7th and 8th \\
 \bottomrule
 \end{tabular}}
 \end{table}
@@ -731,11 +834,12 @@ are not forecast by the environment. Three seeds give reliable means at the full
 $\le 0.008$ for the best controllers), but at 60{,}000 steps the spread grows to 0.016--0.030, so single-seed screening at
 short budgets can mislead: the history features looked best with SAC on one seed, gave no reliable gain over three
 seeds, and only helped once combined with TQC at the full budget. Larger studies should use more seeds
-\cite{agarwal2021precipice}. The RL-tuned MPC results are for one seed; seeds 100 and 2026 are being run to confirm them.
+\cite{agarwal2021precipice}. Apart from M152 and M155 (three seeds), the RL-tuned MPC results are for one seed.
 The Phase~III scores are computed with the official formulas on CityLearn 2.1.2, not by the challenge's evaluator, and the
 dataset's weather ``forecasts'' equal the actual weather, which every entry received alike. Household load remains hard
-to forecast hourly; the deep sequence forecasters we prepared (MLP, LSTM and Transformer, trained leave-district-out) are
-the next step.
+to forecast hourly: per-building deep forecasters (MLP, LSTM and Transformer) were no more accurate than LightGBM, and
+the district-total forecasters, deep or not, stop at about 78\% accuracy on these inputs. Better inputs (occupancy,
+appliance schedules or sub-hourly data) are more likely to help than larger models.
 
 \section{Relevance to the Sustainable Development Goals}\label{sec:sdg}
 Battery control in grid-interactive buildings addresses several of the United Nations Sustainable Development Goals
@@ -774,10 +878,13 @@ whose per-step terms add up to the official KPIs on the no-battery scale and mea
 model-free RL effective: with SAC it reduced electricity cost by 28.0\% and emissions by 18.3\% over three seeds, and
 TQC with past-only history features gave the best pure-RL Phase~I score (0.763). Pure RL, however, plateaued at a
 Phase~III public score of about 0.85. Combining leakage-free LightGBM forecasts, a receding-horizon linear program and an
-RL agent that retunes the optimiser's weights every hour reduced cost by 33.6\% and emissions by 21.7\% and reached
-Phase~III public and private scores of 0.782 and 0.845, between 7th and 8th place of the published leaderboard, with the
-lowest carbon KPI of any published entry (0.769 vs.\ 0.803). The remaining gap to the winner lies in the grid KPI and,
-above all, in hourly load forecasting: with perfect net-load forecasts the same optimiser would score 0.633. For
+RL agent that retunes the optimiser's weights every hour reduced cost by 34.3\% and emissions by 22.2\% and reached
+Phase~III public and private scores of $0.774 \pm 0.003$ and $0.844 \pm 0.004$ over three seeds, between 7th and 8th
+place of the public leaderboard, with the lowest carbon KPI of all 42 entries (0.764 vs.\ 0.803). The remaining gap to the winner lies in the grid KPI and,
+above all, in hourly load forecasting: with perfect net-load forecasts the same optimiser would score 0.633, and nearly
+all of that value lies in the district's total load over the next few hours. Forecasting that total directly, with
+models trained on random groups of other buildings, gave a plain MPC the best private score of the study (0.839),
+while the RL tuning no longer added to it. For
 practitioners, the recipe is to align the reward with the evaluation, use RL to adapt an optimiser rather than to replace
 it, and invest in forecasting.
 

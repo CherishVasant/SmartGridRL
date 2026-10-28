@@ -18,9 +18,10 @@ source: "[[all_methods_results.csv]]"
 > the carbon emissions and the strain on the grid go down. We tried **reinforcement learning** (PPO, SAC, TQC, CrossQ),
 > **model predictive control** (an optimiser driven by forecasts) and a **hybrid where RL tunes the optimiser**. Every
 > method below except the last section is *deployable*: it only uses information a real building would have at that
-> moment. The best deployable controller, the **RL-tuned MPC with LightGBM forecasts**, cuts the bill by about 34% and
-> emissions by about 22% on the training buildings, and reaches a Phase III public score of **0.782** (published winner
-> 0.728).
+> moment. The best deployable controller, the **RL-tuned MPC with tuned LightGBM forecasts (M152)**, cuts the bill by
+> about 34% and emissions by about 22% on the training buildings, and reaches a Phase III public score of
+> **0.774 ± 0.003** over three seeds (8th of 42 entries; published winner 0.728), with the **lowest carbon of all 42
+> entries**.
 
 All numbers come from [[all_methods_results.csv]] (also `all_methods_results.xlsx`). Results with 3 seeds are the mean
 of seeds 42, 100 and 2026; single-seed results use seed 42.
@@ -30,9 +31,11 @@ of seeds 42, 100 and 2026; single-seed results use seed 42.
 > [!important] The score to beat
 > The fair target is the **Phase III public score** of the NeurIPS 2022 CityLearn Challenge (lower is better):
 > **0.728** by the winner, *Together*. Matching the top 3 needs **≤ 0.753**, the top 10 **≤ 0.797**.
-> **Our best deployable controller: 0.782** (RL-tuned MPC with LightGBM forecasts) → between 7th and 8th place.
+> **Our best deployable controller: 0.774 ± 0.003** (M152, RL-tuned MPC with tuned LightGBM forecasts, 3 seeds)
+> → between 7th and 8th place.
 
-**Phase III public leaderboard** (0.4 × training buildings + 0.6 × unseen validation buildings; the official ranking)
+**Phase III public leaderboard** (0.4 × training buildings + 0.6 × unseen validation buildings; the official ranking).
+The AIcrowd page lists **all 42 entries** with their C, G and D; the top 10 are shown here.
 
 | Rank | Team | Score | Cost C | Carbon G | Grid D |
 |---|---|---|---|---|---|
@@ -43,29 +46,44 @@ of seeds 42, 100 and 2026; single-seed results use seed 42.
 | 5 | Orca | 0.760 | 0.659 | 0.836 | 0.784 |
 | 6 | Greener | 0.764 | 0.663 | 0.821 | 0.809 |
 | 7 | DivMARL | 0.767 | 0.653 | 0.805 | 0.842 |
-| – | ***Ours: RL-tuned MPC (M131)*** | ***0.782*** | ***0.661*** | ***0.769*** | ***0.916*** |
+| – | ***Ours: RL-tuned MPC (M152, 3 seeds)*** | ***0.774*** | ***0.655*** | ***0.764*** | ***0.902*** |
 | 8 | SCRG_UA | 0.789 | 0.666 | 0.880 | 0.820 |
 | 9 | LA_gang | 0.796 | 0.665 | 0.852 | 0.873 |
 | 10 | tymur_prorochenko | 0.797 | 0.693 | 0.861 | 0.838 |
 
-Our C, G and D in this row are the same 0.4 / 0.6 blend of the training and validation districts (M131).
+Our C, G and D in this row are the same 0.4 / 0.6 blend of the training and validation districts (M152, mean of
+seeds 42, 100 and 2026).
 
-**Where we stand, KPI by KPI** (Phase III public formula; lower is better)
+**Where we stand, KPI by KPI** (Phase III public formula, all 42 entries; lower is better)
 
-| KPI | Ours (M131) | Best published | Where we'd rank |
+| KPI | Ours (M152) | Best of 42 entries | Where we'd rank |
 |---|---|---|---|
-| **Carbon G** | **0.769** | 0.803 (ambitiousengineers) | **1st** (−4% vs the best team) |
-| Cost C | 0.661 | 0.639 (Together) | about 5th (behind Together, EVERGi, DivMARL, Orca) |
-| Grid D | 0.916 | 0.738 (Together) | worse than all top 10 |
-| **Overall** | **0.782** | **0.728** (Together) | between 7th and 8th |
+| **Carbon G** | **0.764** | 0.803 (ambitiousengineers) | **1st of 42** (−5% vs the best team) |
+| Cost C | 0.655 | 0.639 (Together) | 4th (behind Together, EVERGi, DivMARL) |
+| Grid D | 0.902 | 0.738 (Together) | 14th |
+| **Overall** | **0.774** | **0.728** (Together) | between 7th and 8th |
+
+**Private leaderboard** (0.2 train + 0.3 validation + 0.5 test buildings; decided the winners). It was visible only to
+the organisers and its per-team values are not published. The challenge overview (Nweye et al., 2023, Appendix B.1)
+gives only the participants' medians:
+
+| KPI | Ours (M152, 3 seeds) | Participants' median |
+|---|---|---|
+| Cost C | **0.728** | 0.792 |
+| Carbon G | **0.861** | 0.940 |
+| Grid D | **0.942** | 0.996 |
+| **Score** | **0.844 ± 0.004** | 0.907 |
 
 > [!success] What this means
-> Without any future data, our controller has the **lowest carbon of every published Phase III entry**, a top-5 bill,
-> and an overall score between 7th and 8th place. The gap to the winner is mainly the **grid KPI D** (smoothness of the
-> district load); our reward weights carbon twice as much as cost, which trades some grid smoothness for emissions.
+> Without any future data, our controller has the **lowest carbon of all 42 Phase III public entries** (checked against
+> the full list, not just the top 10), the 4th-lowest bill, and an overall score between 7th and 8th place. On the
+> private leaderboard it beats the participants' median on every KPI; whether its carbon is also the lowest there cannot
+> be checked, because per-team private values were never published. The gap to the winner is mainly the **grid KPI D**
+> (smoothness of the district load); our reward weights carbon twice as much as cost, which trades some grid
+> smoothness for emissions, so the carbon rank reflects that trade-off as much as the controller's quality.
 
 > [!warning] Status of these numbers
-> - Single seed (42); seeds 100 and 2026 of M131 / M135 are running to confirm them.
+> - M152 / M155: mean of seeds 42, 100 and 2026; the other rows of this report say how many seeds they use.
 > - Computed locally with the official KPI formulas on CityLearn 2.1.2, not by the challenge's own evaluator.
 > - The dataset's "predicted" weather equals the actual weather; every team received the same, so it favours no one.
 
@@ -232,10 +250,66 @@ learning-rate decay to 300k steps, no or stronger battery-wear penalty (Phase I 
 |---|---|---|
 | Seasonal (persistence) | 0.5 × same hour yesterday + 0.5 × same hour over the last week, plus the current error fading over the horizon | 2.65 / 3.28 / 3.82 kWh |
 | **LightGBM** | Gradient-boosted trees on lags, calendar and weather forecasts; trained only on buildings *outside* the district it forecasts; scale-free features | **2.30 / 2.83 / 3.71** kWh |
-| Deep (MLP / LSTM / Transformer) | Prepared for GPU training in Colab (`colab/deep_forecaster_colab.ipynb`) | *not yet trained* |
+| Deep per building (MLP / LSTM / Transformer) | Trained on a Colab GPU (`colab/F1/`), leave-district-out | no more accurate than LightGBM |
+| District total (LightGBM, F2 deep, F3 searched) | See 3.5.1 below | district total 77–80% accurate |
 
 Solar is easy to forecast (R² 0.95–0.98); household **load is not** (R² 0.4–0.6, about 40% average error), and it is
 the main limit: with *perfect* load forecasts the same MPC would score S = 0.633 instead of 0.81.
+
+#### 3.5.1 District-total forecasting (F2 / F3)
+
+**Which forecast errors cost score?** Fixed LightGBM MPC (S 0.784 train / 0.779 validation), with one part of its
+forecast replaced by the true future (a diagnostic only, not deployable):
+
+| Made perfect | S train | S validation |
+|---|---|---|
+| nothing (LightGBM) | 0.784 | 0.779 |
+| solar | 0.782 | 0.776 |
+| per-building load | 0.648 | 0.648 |
+| **district total load only** | **0.649** | **0.648** |
+| load for the next 6 hours only | 0.659 | 0.651 |
+
+> [!important] What matters
+> Almost all the value of better forecasts is in the **district's total load over the next few hours**. That total is
+> also much easier to forecast than single buildings (58% accurate per building, 75% for the sum), because the
+> buildings' random fluctuations partly cancel.
+
+**Direct district-total forecasters**, all trained on *pseudo-districts* (random groups of the other districts'
+buildings) and never on the district they forecast. The per-building forecasts are rescaled to add up to the total.
+- **LightGBM total**: gradient-boosted trees (`tools/load_lab.py`).
+- **F2** (`colab/F2/`, GPU): an MLP and a patch Transformer.
+- **F3** (`colab/F3/`, GPU): Optuna search, 30 trials per district, over five families (MLP with hour / weekday
+  embeddings, GRU, TCN, N-BEATS, PatchTST), chosen by cross-validation between the two other districts; the best
+  configuration trained with 3 seeds. The search picked the embedding MLP for every district.
+
+District-total accuracy over the next 24 h (1 − MAE / mean):
+
+| District | LightGBM, sum of buildings | LightGBM, direct (best) | F2 | F3 |
+|---|---|---|---|---|
+| Train (1–5) | 75.0% | **77.8%** | 76.8% | 77.2% |
+| Validation (6–10) | 70.6% | **72.4%** | 72.1% | 71.6% |
+| Test (11–17) | 77.5% | **79.8%** | 79.0% | 78.7% |
+
+The direct models gain 1–2 points; they are within a point of each other, and F3's five best configurations were
+within 0.1 points, so about 78% looks close to what these inputs allow.
+
+**Effect on control** (seed 42; the MPC uses the mean of the LightGBM and the deep total):
+
+| Controller | Phase I | S train | S test | Public | Private |
+|---|---|---|---|---|---|
+| MPC, LightGBM | 0.742 | 0.784 | 0.910 | 0.781 (8th; beats SCRG_UA, LA_gang, tymur) | 0.846 |
+| MPC, + F2 total | 0.731 | 0.778 | **0.902** | 0.778 (8th; beats SCRG_UA, LA_gang, tymur) | 0.840 |
+| **MPC, + F3 total** | 0.729 | **0.775** | 0.903 | 0.7745 (8th; beats SCRG_UA, LA_gang, tymur) | **0.839** |
+| MPC, + F2 + F3 total | 0.730 | 0.777 | **0.902** | 0.776 (8th; beats SCRG_UA, LA_gang, tymur) | **0.839** |
+| M152 RL-tuned MPC, LightGBM | **0.715** (5th; beats LA_gang, DivMARL) | 0.778 | 0.909 | **0.772** (8th; beats SCRG_UA, LA_gang, tymur) | 0.841 |
+| M169 RL-tuned MPC, + F2 total | 0.722 (6th; beats DivMARL) | 0.776 | 0.906 | 0.776 (8th; beats SCRG_UA, LA_gang, tymur) | 0.841 |
+| M170 RL-tuned MPC, + F3 total | 0.716 (5th; beats LA_gang, DivMARL) | **0.774** | 0.910 | 0.773 (8th; beats SCRG_UA, LA_gang, tymur) | 0.841 |
+
+> [!success] Result
+> With the F3 total forecast, a **plain MPC (no RL) gets the best private score of the project, 0.839**, and the same
+> public score as the RL-tuned M152 (0.7745). On top of the RL-tuned MPC, the better forecasts add nothing (M169, M170):
+> the RL agent's gain comes mainly from correcting the weaknesses of the forecasts it was trained with, and that margin
+> shrinks as the forecasts improve.
 
 ### 3.6 MPC – Model Predictive Control
 
@@ -268,31 +342,36 @@ the main limit: with *perfect* load forecasts the same MPC would score S = 0.633
 | M129 | seasonal | TQC | 0.728 | 0.808 | **0.663** | 0.793 | 0.970 | 0.807 | 0.864 |
 | M130 | seasonal | SAC | 0.735 | 0.810 | 0.679 | 0.791 | 0.960 | 0.809 | 0.866 |
 | M132 | seasonal, grid-weighted reward | TQC | 0.747 | 0.810 | 0.703 | 0.791 | 0.934 | 0.808 | 0.866 |
-| **M131** | **LightGBM** | **TQC** | **0.723** | 0.787 | 0.664 | **0.783** | 0.914 | **0.782** | 0.845 |
-| **M135** | **LightGBM** | **SAC** | 0.724 | **0.786** | 0.665 | **0.783** | **0.909** | **0.782** | **0.844** |
-| M133 | LightGBM, carbon weight 1 | TQC | 0.727 | **0.786** | 0.669 | 0.784 | **0.905** | – | – |
+| M131 | LightGBM | TQC | 0.723 | 0.787 | 0.664 | 0.783 | 0.914 | 0.782 | 0.845 |
+| M135 | LightGBM | SAC | 0.724 | 0.786 | 0.665 | 0.783 | 0.909 | 0.782 | 0.844 |
+| M133 | LightGBM, carbon weight 1 | TQC | 0.727 | 0.786 | 0.669 | 0.784 | 0.905 | – | – |
+| **M152** | **tuned LightGBM, 30 h, 3 seeds** | **TQC** | 0.717 (5th; beats LA_gang, DivMARL) | **0.778** | 0.657 | **0.778** | **0.900** | **0.774** (8th; beats SCRG_UA, LA_gang, tymur) | **0.844** |
+| M155 | tuned LightGBM, 36 h, 3 seeds | SAC | **0.715** (5th; beats LA_gang, DivMARL) | **0.778** | **0.653** | **0.778** | 0.904 | 0.775 (8th; beats SCRG_UA, LA_gang, tymur) | 0.845 |
 
 > [!success] Result
-> RL on top of the LightGBM-driven MPC gives the **best deployable results of the project** on every score: bill
-> −33.6%, emissions −21.7%, smoother grid load (D 0.91), and on the unseen buildings public **0.782** / private
-> **0.845**. TQC and SAC give the same result here; what matters is the forecasts and the reward.
+> RL on top of the LightGBM-driven MPC gives the **best deployable public score of the project**. With the
+> Optuna-tuned LightGBM forecasters (PV accuracy about 90% → 96%) and a 30-hour horizon (M152): bill −34.3%, emissions
+> −22.2%, grid D 0.90, and on the unseen buildings public **0.774 ± 0.003** / private **0.844 ± 0.004** over three
+> seeds. TQC and SAC give the same result; what matters is the forecasts and the reward. The best *private* score
+> (0.839) comes from the plain MPC with the F3 district-total forecast (section 3.5.1).
 
 ---
 
 ## 4. Best results
 
-> [!tip] Best deployable controller: **RL-tuned MPC with LightGBM forecasts (M131 TQC / M135 SAC)**
+> [!tip] Best deployable controller: **RL-tuned MPC with tuned LightGBM forecasts (M152 TQC; M155 SAC is equal)**
 > | Score | Value | Meaning |
 > |---|---|---|
-> | Phase I (training buildings) | **0.723** | bill and emissions on average 27.7% lower than without a battery |
-> | Phase III S (training buildings) | **0.786–0.787** | cost −33.6%, carbon −21.7%, grid 0.91 |
-> | Phase III **public** | **0.782** | ≈ 8th on the published leaderboard (Together 0.728, ambitiousengineers 0.742, CUFE 0.753) |
-> | Phase III **private** | **0.844–0.845** | including the 7 unseen test buildings |
-> (single seed, 42)
+> | Phase I (training buildings) | **0.717 ± 0.002** (5th; beats LA_gang, DivMARL) | bill and emissions on average 28.3% lower than without a battery |
+> | Phase III S (training buildings) | **0.778 ± 0.002** | cost −34.3%, carbon −22.2%, grid 0.90 |
+> | Phase III **public** | **0.774 ± 0.003** (8th; beats SCRG_UA, LA_gang, tymur) | lowest carbon of all 42 entries (0.764 vs 0.803) |
+> | Phase III **private** | **0.844 ± 0.004** | including the 7 unseen test buildings; better than the participants' median on every KPI |
+> (mean of seeds 42, 100 and 2026)
 
 | Category | Best method | Seeds | Phase I | S | Public | Private |
 |---|---|---|---|---|---|---|
-| RL-tuned MPC (hybrid) | M131 / M135 | 1 | **0.723** | **0.786** | **0.782** | **0.844** |
+| RL-tuned MPC (hybrid) | M152 | 3 | **0.717 ± 0.002** (5th; beats LA_gang, DivMARL) | **0.778** | **0.774 ± 0.003** (8th; beats SCRG_UA, LA_gang, tymur) | **0.844 ± 0.004** |
+| **MPC (no RL), best private** | **MPC + F3 district-total forecast** | – | 0.729 | **0.775** | 0.7745 (8th; beats SCRG_UA, LA_gang, tymur) | **0.839** |
 | MPC (no RL) | GBM-MPC, ramp weight 3 | – | 0.745 | 0.792 | 0.789 | 0.848 |
 | Pure RL (most robust) | M113 TQC + history | 3 | 0.763 ± 0.005 | 0.862 | 0.854 * | – |
 | Pure RL (best single run) | M123 TQC + history, γ 0.98 | 1 | 0.757 | 0.855 | – | – |
@@ -301,9 +380,9 @@ the main limit: with *perfect* load forecasts the same MPC would score S = 0.633
 
 \* public score computed on training + unseen validation buildings (same formula).
 
-> [!example] Published Phase III public leaderboard (top 10) for comparison
+> [!example] Published Phase III public leaderboard (top 10 of 42) for comparison
 > Together 0.728 · ambitiousengineers 0.742 · CUFE 0.753 · EVERGi 0.756 · Orca 0.760 · Greener 0.764 · DivMARL 0.767 ·
-> SCRG_UA 0.789 · LA_gang 0.796 · tymur 0.797. Our 0.782 sits between DivMARL and SCRG_UA. The published teams
+> SCRG_UA 0.789 · LA_gang 0.796 · tymur 0.797. Our 0.774 sits between DivMARL and SCRG_UA. The published teams
 > trained their forecasters on the public buildings that are also 40% of the public score; ours never see the
 > buildings they forecast.
 
