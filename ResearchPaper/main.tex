@@ -9,6 +9,8 @@
 \usepackage[hidelinks]{hyperref}
 \usepackage{pifont}
 \usepackage{array}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
 \newcommand{\fullstar}{\ding{72}}
 \newcommand{\emptystar}{\ding{73}}
 
@@ -16,281 +18,268 @@
 
 \begin{document}
 
-\title{Score-Aligned Reinforcement Learning and RL-Tuned Model Predictive Control for Deployable Community Battery
-Storage}
+\title{RL-Tuned Model Predictive Control with Leakage-Free Forecasts for Deployable Community Battery Storage}
 
 \author{Cherish~Vasant}
 
 \markboth{IEEE Transactions on Smart Grid (manuscript draft)}%
-{Vasant: Score-Aligned RL and RL-Tuned MPC for Deployable Community Battery Storage}
+{Vasant: RL-Tuned MPC with Leakage-Free Forecasts for Deployable Community Battery Storage}
 
 \maketitle
 
 \begin{abstract}
-Batteries in grid-interactive buildings can lower electricity bills and emissions by shifting consumption in time, but a
-controller that runs in a real building never knows future prices, carbon intensity or demand. Model-free deep
-reinforcement learning (RL) is attractive because it learns a control policy from interaction alone, yet its performance
-depends heavily on how the reward encodes the operator's objectives. We study 100 deployable controllers for
-district-level battery control on the CityLearn Challenge 2022 benchmark: every controller acts on current measurements,
-past information and the forecasts provided by the environment, and nothing is trained on the buildings it is evaluated on
-in the unseen-building tests. For pure RL, the key ingredient is a \emph{score-aligned counterfactual reward} whose
-per-step terms equal the official district-level key performance indicators (KPIs), scaled by their no-battery values and
-expressed as the improvement over idling. With Soft Actor-Critic (SAC) it lowers the electricity cost by 28.0\% and the
-carbon emissions by 18.3\% relative to no battery over three seeds, whereas a rule-based controller and a PPO cost-only
-agent are no better than idling; Truncated Quantile Critics (TQC) with past-only history features reaches a Phase~I score of
-$0.763 \pm 0.005$. Pure RL, however, plateaus at a Phase~III public score of 0.853. Following the challenge winners, we
-then combine leakage-free LightGBM load and PV forecasts, a receding-horizon linear-programming controller (MPC) and an RL
-agent that retunes the MPC's weights every hour. This \emph{RL-tuned MPC} reduces cost by 34.3\% and emissions by 22.2\%
-on the training buildings and, evaluated with the official Phase~III formulas on all 17 challenge buildings, reaches a
-public score of $0.774 \pm 0.003$ and a private score of $0.844 \pm 0.004$ over three seeds (8th among the 42 public
-leaderboard entries; winner 0.728). Its carbon KPI of 0.764 is the lowest of all 42 entries (best 0.803), and each of its
-private-leaderboard KPIs is better than the participants' median. Load forecasting is the main remaining limit: with
-perfect net-load forecasts the same MPC would score 0.633, and only the district's total load over the next hours
-matters. Deep district-total forecasters, found by an automated search on a GPU and trained on random groups of
-buildings from the other districts, raise that forecast's accuracy by 1--2 points and give a plain MPC the best private
-score of the study (0.839).
+Home batteries can cut electricity bills and emissions by shifting consumption in time. But a controller in a real building
+never knows the future demand, solar generation or carbon intensity. This paper proposes an \emph{RL-tuned
+model predictive controller} for the batteries of a whole district. Gradient-boosted forecasters predict the load and
+solar output of every building, and they are trained and tuned only on buildings outside the district they serve. A
+linear program then plans all batteries over the next 30 hours. A reinforcement learning (RL) agent, trained with
+Truncated Quantile Critics (TQC), sets three weights of this program every hour: the cost of ramping, the price of
+carbon and the value of stored energy. Its reward adds up to the official performance indicators and measures the gain
+over leaving the batteries idle. The agent sees only district-level features, so one policy trained on five buildings
+controls districts of any size. We evaluate it on the CityLearn Challenge 2022 benchmark with the official formulas, on
+all 17 buildings and with three seeds. It lowers the electricity cost by 34.3\% and the emissions by 22.2\% on the
+training buildings. Its Phase~III public score is $0.774 \pm 0.003$ and its private score $0.844 \pm 0.004$, which
+places it 8th among the 42 public entries (winner 0.728). Its carbon score of 0.764 is the lowest of all 42 entries.
+Ablations show that the optimiser, the forecasts and the RL tuning all contribute. The main remaining limit is the
+forecast of the district's total load over the next few hours: a perfect forecast would lower the score to about 0.65.
 \end{abstract}
 
 \begin{IEEEkeywords}
-Battery energy storage, demand response, deep reinforcement learning, soft actor-critic, model predictive control,
-load forecasting, reward design, CityLearn, carbon-aware control, grid-interactive buildings.
+Battery energy storage, demand response, deep reinforcement learning, model predictive control, truncated quantile
+critics, load forecasting, reward design, CityLearn, carbon-aware control, grid-interactive buildings.
 \end{IEEEkeywords}
 
 \section{Introduction}
-\IEEEPARstart{B}{uildings} account for a large share of electricity demand, and distributed photovoltaic (PV) generation
-and behind-the-meter batteries turn them into flexible grid resources. By charging when electricity is cheap or clean and
-discharging when it is expensive or carbon-intensive, a battery can reduce both the bill of its owner and the emissions
-caused by its consumption, while a coordinated fleet can also smooth the aggregate load seen by the distribution grid
-\cite{vazquez2019review,wang2020rlbuildings}.
+\IEEEPARstart{B}{uildings} use a large share of all power. Rooftop photovoltaic (PV) panels and home batteries
+now turn many of them into flexible grid resources. A battery that charges when power is cheap or clean, and discharges
+when it is costly or carbon-intensive, lowers both the owner's bill and the emissions caused by the home. A fleet of
+such batteries can also smooth the load that the local grid has to supply \cite{vazquez2019review,wang2020rlbuildings}.
 
-Classical control of such systems relies either on hand-crafted rules or on model predictive control with forecasts of
-demand, generation, prices and carbon intensity. Rules are simple but cannot adapt, and optimisation-based control
-requires accurate models and forecasts that are costly to build for every building. Model-free deep reinforcement
-learning (RL) \cite{sutton2018rl} offers an alternative: a policy is learned directly from interaction with the system,
-without an explicit model, and acts in real time on the information available at each step
-\cite{yu2021review,nagy2023tenquestions}. The CityLearn environment \cite{vazquez2019citylearn,nweye2024citylearn} and the
-NeurIPS 2022 CityLearn Challenge \cite{citylearn2022challenge} made this setting a common benchmark, with an official
-score that combines electricity cost, carbon emissions and grid KPIs.
+Two families of controllers are common. Rule-based controllers are simple, but they cannot adapt to the weather, the
+tariff or the state of the grid. Model predictive control (MPC) plans ahead with forecasts, but it is only as good as
+those forecasts and as the fixed weights that trade cost against emissions and grid impact. Model-free deep
+reinforcement learning (RL) \cite{sutton2018rl} learns a policy from interaction alone \cite{yu2021review,nagy2023tenquestions}.
+On its own, an RL agent must discover the daily patterns of price and demand and the long-term effect of each
+charge decision from a single scalar reward. The CityLearn environment \cite{vazquez2019citylearn,nweye2024citylearn} and
+the NeurIPS 2022 CityLearn Challenge \cite{citylearn2022challenge} turned this problem into a shared benchmark. Its
+official score combines the electricity cost, the carbon emissions and two grid key performance indicators (KPIs).
 
-A recurring difficulty is that the quantities an operator cares about are yearly, district-level KPIs, whereas an RL agent
-optimises a per-step scalar reward. Naive choices, such as the negative bill of each building or a weighted sum of terms on
-arbitrary scales, are poorly aligned with the official KPIs: they ignore that exports earn nothing in the official cost,
-that buildings offset each other at district level, and that terms with different magnitudes dominate one another. They
-also produce high-variance learning targets because most of the reward is driven by exogenous demand rather than by the
-battery action. Our experiments show that such misalignment can make learned controllers no better than leaving the
-batteries idle.
+This paper proposes a controller in which each part does what it does best. Forecasters predict what can be predicted.
+A linear program turns the forecasts into a battery schedule that respects the battery limits. An RL agent adjusts the
+program's trade-offs every hour and corrects for what fixed weights and imperfect forecasts miss. We keep the controller
+deployable throughout. It uses only current and past measurements and the forecasts that the environment provides. It
+never uses future data or precomputed optimal schedules, and no model sees the homes it is tested on.
 
-This paper studies how far genuinely deployable controllers can go on the CityLearn 2022 benchmark. We deliberately
-restrict ourselves to controllers that could run in a real building: they see only current and past measurements and the
-forecasts that the environment itself provides, without access to future data or to precomputed optimal schedules, and
-every forecaster or policy evaluated on unseen buildings is trained without them. We first ask how far model-free RL
-alone can go when the reward is designed carefully, and then, following the approach of the challenge winners, combine
-forecasting, optimisation and RL. Our contributions are:
+The contributions are as follows.
 \begin{enumerate}
-  \item A systematic comparison of 100 deployable controllers: 65 model-free RL agents (PPO, SAC, TQC, CrossQ; central and
-        decentralised; eight reward families; several network sizes, history features and training lengths), 27 model
-        predictive controllers and 6 RL-tuned model predictive controllers.
-  \item A \emph{score-aligned counterfactual reward} whose per-step terms sum to the official KPIs, scaled by the
-        no-battery reference and expressed as the improvement over idling; with SAC it reduces cost by 28.0\% and
-        emissions by 18.3\% relative to no battery, and with TQC and past-only history features it gives the best
-        pure-RL Phase~I score.
-  \item An \emph{RL-tuned MPC}: leakage-free LightGBM forecasts (trained only on buildings outside the controlled
-        district) drive a receding-horizon linear program whose weights an RL agent retunes every hour from district-level
-        features, so one policy runs on districts of any size. Evaluated with the official Phase~III formulas on all 17
-        challenge buildings it scores $0.774 \pm 0.003$ (public) and $0.844 \pm 0.004$ (private) over three seeds,
-        with the lowest carbon KPI of all 42 entries on the public leaderboard.
-  \item Ablations and negative results (reward normalisation, decentralised agents, residual learning on a rule-based
-        controller, larger networks, longer training, forecast blending), a generalisation test on unseen buildings, and
-        an analysis showing that net-load forecasting, specifically of the district total over the next few hours, is the
-        main remaining limit.
-  \item Leakage-free district-total forecasters: LightGBM and deep models trained on \emph{pseudo-districts} (random
-        groups of the other districts' buildings), including an automated search over five deep model families; with
-        them a plain MPC reaches the best private score of the study.
+  \item An \emph{RL-tuned MPC} (Fig.~\ref{fig:arch}). A TQC agent sets three weights of a receding-horizon linear
+        program every hour. Its inputs are district-level, so one policy runs on districts of any size.
+  \item A \emph{score-aligned counterfactual reward}. Its terms add up to the official KPIs, use the no-battery
+        run as their scale and measure the gain over idle batteries.
+  \item A leakage-free forecasting protocol. The load and PV forecasters of a district are trained and tuned only on
+        the homes of the other districts.
+  \item A full evaluation. We score all 17 challenge homes with the official formulas over three seeds, compare
+        with all 42 public leaderboard entries and the private medians, ablate each component, and show which forecast
+        errors limit the score.
 \end{enumerate}
 
-The remainder of the paper is organised as follows. Section~\ref{sec:related} surveys related work.
-Section~\ref{sec:problem} formulates the control problem and the KPIs. Section~\ref{sec:method} describes the agents,
-reward designs, forecasters and the RL-tuned MPC, Section~\ref{sec:setup} the experimental protocol, and
-Section~\ref{sec:results} the results. Section~\ref{sec:discussion} discusses limitations, Section~\ref{sec:sdg} the
-relevance to the Sustainable Development Goals, and Section~\ref{sec:conclusion} concludes.
+Section~\ref{sec:related} reviews related work and Section~\ref{sec:problem} states the problem. Section~\ref{sec:method}
+describes the controller and Section~\ref{sec:setup} the experiments. Section~\ref{sec:results} reports the results and
+Section~\ref{sec:discussion} discusses them. Section~\ref{sec:sdg} relates the work to the Sustainable Development Goals,
+and Section~\ref{sec:conclusion} concludes.
 
 \section{Related Work}\label{sec:related}
 
-\subsection{Reinforcement Learning for Building Energy and Demand Response}
-V\'azquez-Canteli and Nagy \cite{vazquez2019review} reviewed RL for demand response and found that most studies used
-tabular or simple function approximators, single buildings and bespoke simulators, which made results hard to compare.
-Wang and Hong \cite{wang2020rlbuildings} and Yu \emph{et al.} \cite{yu2021review} surveyed deep RL for building control,
-identifying sample efficiency, safety, reward design and generalisation across buildings as the main open problems.
-Nagy \emph{et al.} \cite{nagy2023tenquestions} discussed ten questions on RL for building energy management, including the
-need for standard benchmarks and KPIs. Early deep RL applications include HVAC control with deep Q-networks
-\cite{wei2017hvac,mnih2015dqn} and on-line building energy optimisation with deep policy-gradient and Q-learning methods
-\cite{mocanu2019online}. Dulac-Arnold \emph{et al.} \cite{dulacarnold2021challenges} formalised the challenges of applying RL
-in the real world, many of which (multi-objective rewards, partial observability, limited data) are central to battery
+\subsection{Reinforcement Learning for Building Energy}
+V\'azquez-Canteli and Nagy \cite{vazquez2019review} reviewed RL for demand response. Most of the studies they found used
+simple function approximators, single homes and custom simulators, so their results were hard to compare. Wang and
+Hong \cite{wang2020rlbuildings} and Yu \emph{et al.} \cite{yu2021review} surveyed deep RL for building control. They
+named sample efficiency, safety, reward design and transfer across homes as the main open problems. Nagy \emph{et
+al.} \cite{nagy2023tenquestions} raised ten questions on RL for building energy, including the need for shared
+benchmarks and KPIs. Early deep RL work controlled heating and cooling with deep Q-networks
+\cite{wei2017hvac,mnih2015dqn} and optimised building energy online with policy-gradient and Q-learning methods
+\cite{mocanu2019online}. Dulac-Arnold \emph{et al.} \cite{dulacarnold2021challenges} listed the challenges of real-world
+RL. Several of them, such as multi-objective rewards, partial observability and limited data, are central to battery
 control.
 
 \subsection{CityLearn and Grid-Interactive Communities}
-CityLearn \cite{vazquez2019citylearn} is an OpenAI Gym environment for coordinated demand response in districts of
-buildings with storage and PV; CityLearn v2 \cite{nweye2024citylearn} extends it with electric vehicles, occupant comfort,
-resilience and carbon-aware control. MARLISA \cite{vazquez2020marlisa} coordinated multiple agents through iterative
-sequential action selection for load shaping. Nweye \emph{et al.} \cite{nweye2022realworld} analysed real-world
-challenges for multi-agent RL in grid-interactive buildings, and MERLIN \cite{nweye2023merlin} studied offline and transfer
-learning for occupant-centric operation of communities. The NeurIPS 2022 CityLearn Challenge \cite{citylearn2022challenge}
-evaluated controllers on cost, carbon and grid KPIs normalised by the case without batteries; we use its dataset, its
-official KPI definitions and its public leaderboard as reference points.
+CityLearn \cite{vazquez2019citylearn} is an OpenAI Gym environment for demand response in districts of homes with
+storage and PV. Its second version \cite{nweye2024citylearn} adds electric vehicles, occupant comfort, resilience and
+carbon-aware control. MARLISA \cite{vazquez2020marlisa} coordinated several agents through sequential action selection
+to shape the district load. Nweye \emph{et al.} \cite{nweye2022realworld} studied the real-world challenges of
+multi-agent RL in such communities, and MERLIN \cite{nweye2023merlin} used offline and transfer learning for them. The
+NeurIPS 2022 CityLearn Challenge \cite{citylearn2022challenge} scored controllers on cost, carbon and grid KPIs, each
+divided by its value with no batteries. We use its data, its KPIs and its leaderboards as references.
 
 \subsection{Forecasting, Optimisation and the Challenge Winners}
-Model predictive control (MPC) solves an optimisation problem over a receding horizon with forecasts of the disturbances
-and applies only the first decision \cite{rawlings2017mpc}. The top entries of the 2022 challenge, summarised by the
-organisers \cite{nweye2023challenge}, all combined forecasting with optimisation or learning: the winner, Together, used
-gradient-boosted trees and linear models to forecast load and PV, a rolling-horizon stochastic optimisation and an
-ensemble with multi-agent PPO \cite{yu2022mappo}; the runner-up used dynamic programming in the first phase and
-forecasts with a small policy network trained by CMA-ES \cite{hansen2016cma} later; the third, CUFE, used linear
-forecasts and a per-building 24-hour linear program; the fourth, DivMARL, averaged a shared SAC policy with an
-XGBoost-driven rule. Our forecasters use LightGBM \cite{ke2017lightgbm}. Unlike the challenge entries, which trained
-their forecasters on the public buildings that also form 40\% of the public score, our forecasters never see the
-buildings they forecast.
+MPC solves an optimisation problem over a moving horizon of forecasts and applies only the first decision
+\cite{rawlings2017mpc}. The organisers' overview \cite{nweye2023challenge} shows that all top entries of the 2022
+challenge combined forecasting with optimisation or learning. The winner, Together, forecast load and PV with
+gradient-boosted trees and linear models. It then mixed a rolling-horizon stochastic optimiser with multi-agent PPO
+\cite{yu2022mappo}. The runner-up used dynamic programming in the first phase and, later, forecasts with a small policy
+network trained by CMA-ES \cite{hansen2016cma}. The third team, CUFE, solved a 24-hour linear program per building with
+linear forecasts. The fourth, DivMARL, averaged a shared SAC policy with a rule driven by XGBoost forecasts. Our
+forecasters use LightGBM \cite{ke2017lightgbm} with settings chosen by Optuna \cite{akiba2019optuna}. Unlike the challenge
+entries, they never see the homes they forecast. The entries trained theirs on the public buildings, which also make
+up 40\% of the public score.
 
-\subsection{Deep RL Algorithms for Continuous Control}
-Battery set-points are continuous, so actor-critic methods are the natural choice. DDPG \cite{lillicrap2016ddpg} and TD3
-\cite{fujimoto2018td3} learn deterministic policies with off-policy critics, TD3 adding clipped double Q-learning to curb
-over-estimation. Soft Actor-Critic (SAC) \cite{haarnoja2018sac,haarnoja2018sacapps} maximises reward plus policy entropy,
-with automatic temperature tuning, and is among the most robust off-policy methods. Proximal Policy Optimization (PPO)
-\cite{schulman2017ppo} is a widely used on-policy alternative. More recent work improves sample efficiency and value
-estimation: TQC \cite{kuznetsov2020tqc} truncates a mixture of distributional critics, REDQ \cite{chen2021redq} uses an
-ensemble of critics with a high update-to-data ratio, CrossQ \cite{bhatt2024crossq} removes target networks through batch
-normalisation, and multi-step returns \cite{hessel2018rainbow} propagate delayed rewards faster. We use the
-Stable-Baselines3 implementations \cite{raffin2021sb3}.
+\subsection{Deep RL for Continuous Control}
+The MPC weights are continuous, so actor-critic methods fit the task. DDPG \cite{lillicrap2016ddpg} and TD3
+\cite{fujimoto2018td3} learn deterministic policies with off-policy critics, and TD3 adds clipped double Q-learning to
+limit over-estimation. Soft Actor-Critic (SAC) \cite{haarnoja2018sac,haarnoja2018sacapps} maximises the reward plus the
+policy entropy and tunes its temperature automatically. It is among the most robust off-policy methods. PPO
+\cite{schulman2017ppo} is a common on-policy alternative. TQC \cite{kuznetsov2020tqc}, which we use, extends SAC with a
+mixture of distributional critics and drops their largest quantiles to reduce over-estimation. REDQ \cite{chen2021redq}
+and CrossQ \cite{bhatt2024crossq} pursue the same aim with critic ensembles and batch normalisation, and multi-step
+returns \cite{hessel2018rainbow} pass delayed rewards back faster. We use the Stable-Baselines3 implementations
+\cite{raffin2021sb3}.
 
-\subsection{Reward Design and Multi-Objective Weighting}
-Battery control is inherently multi-objective \cite{roijers2013survey}: cost, emissions, ramping and peaks often conflict.
-Scalarising them requires weights and scales; poorly scaled terms let one objective dominate. Ng \emph{et al.}
-\cite{ng1999shaping} showed which reward transformations leave the optimal policy unchanged, a property we exploit with an
-action-independent counterfactual baseline. In multi-task learning, Dynamic Weight Average \cite{liu2019dwa} and
-uncertainty weighting \cite{kendall2018uncertainty} adapt loss weights during training; we adapt the former to KPI weights
-in our adaptive multi-KPI rewards. For storage arbitrage specifically, Cao \emph{et al.} \cite{cao2020arbitrage} showed that
-including an accurate battery degradation model in the reward changes the learned arbitrage strategy, motivating the
-small battery-wear term in our rewards.
+\subsection{Reward Design}
+Battery control has several objectives \cite{roijers2013survey}. Cost, emissions, ramping and peaks often conflict, and a
+single reward needs weights and scales for them. If the scales are poor, one objective dominates the others. In
+multi-task learning, such weights are often adapted during training \cite{liu2019dwa,kendall2018uncertainty}. Ng
+\emph{et al.} \cite{ng1999shaping} showed which changes to a reward leave the optimal policy unchanged. Our counterfactual
+baseline relies on this result. For storage arbitrage, Cao \emph{et al.} \cite{cao2020arbitrage} showed that a
+degradation model in the reward changes the learned strategy. This motivates the small battery-wear term in our reward.
 
 \subsection{Evaluation of RL Results}
-Henderson \emph{et al.} \cite{henderson2018matters} and Agarwal \emph{et al.} \cite{agarwal2021precipice} showed that deep RL
-results vary strongly with random seeds and that single-run comparisons are unreliable. We therefore report every result as
-the mean and standard deviation over three independent seeds and evaluate deterministic policies over a full year.
+Henderson \emph{et al.} \cite{henderson2018matters} and Agarwal \emph{et al.} \cite{agarwal2021precipice} showed that
+deep RL results vary strongly with the random seed, so single runs are unreliable. We thus report the proposed
+controller as the mean and standard deviation of three seeds. Each seed is evaluated without exploration over a full year.
 
 \section{Problem Formulation}\label{sec:problem}
 
 \subsection{Environment}
-We use CityLearn 2.1.2 with the \texttt{citylearn\_challenge\_2022\_phase\_1} dataset: five residential buildings with
-rooftop PV and one battery each, simulated hourly for one year (8{,}759 control steps). Each building has an
-uncontrollable non-shiftable load and PV generation; the controller decides, every hour, the charge or discharge rate of
-each battery as a fraction of its capacity. Electricity is billed with a time-of-use tariff and the grid has a time-varying
-carbon intensity.
+We use CityLearn 2.1.2 with the data of the 2022 challenge. It contains 17 homes in three districts: five public
+training buildings (1--5), five validation buildings (6--10) and seven test buildings (11--17). Each home has a load it
+cannot shift, rooftop PV and one battery of 6.4\,kWh and 5\,kW. The simulation runs hourly for one year, or 8{,}759
+control steps. Every hour, the controller sets the charge or discharge rate of each battery as a fraction of its
+capacity. The decision acts over the following hour. Power is billed with a time-of-use tariff, and the carbon
+intensity of the grid changes over the day.
 
-\subsection{Observations and Actions}
-A central agent observes 60 values: calendar features (month, day type, hour); outdoor temperature, relative humidity and
-diffuse and direct solar irradiance, each with the environment's 6, 12 and 24-hour forecasts; the current carbon intensity;
-and, for each building, its non-shiftable load, PV generation, battery state of charge (SoC), net electricity consumption,
-and the current electricity price with its 6, 12 and 24-hour values from the tariff. The action is a vector of five
-continuous battery rates. No future demand, generation or carbon intensity beyond these provided forecasts is available to
-the policy, so every controller in this paper can be deployed as is.
+\subsection{Information Available to the Controller}
+At each hour the controller sees the month, the day type and the hour. It also sees the outdoor temperature, the
+humidity and the diffuse and direct solar irradiance, each with the environment's 6, 12 and 24-hour forecasts, and the
+current carbon intensity. For each home it sees the load, the PV output, the battery state of charge (SoC), the net
+consumption, and the current price with its 6, 12 and 24-hour values from the tariff. The controller has no other
+information about the future, so it can be deployed as it is.
 
 \subsection{Key Performance Indicators}
-Let $E_t$ be the district net consumption at hour $t$ (positive for imports), $\pi_t$ the price and $I_t$ the carbon
-intensity, and let a superscript ``nb'' denote the same quantity in the reference run without batteries. The official
-challenge KPIs are
+Let $E_t$ be the district's net consumption at hour $t$ (positive for imports), $\pi_t$ the price and $I_t$ the carbon
+intensity. A superscript ``nb'' marks the same quantity in the run without batteries. The official KPIs are
 \begin{align}
   C &= \frac{\sum_t \max(0, E_t \pi_t)}{\sum_t \max(0, E_t^{\mathrm{nb}} \pi_t)}, \qquad
   G = \frac{\sum_t \max(0, E_t I_t)}{\sum_t \max(0, E_t^{\mathrm{nb}} I_t)}, \\
   R &= \frac{\sum_t |E_t - E_{t-1}|}{\sum_t |E_t^{\mathrm{nb}} - E_{t-1}^{\mathrm{nb}}|}, \qquad
   D = \tfrac{1}{2}\bigl(R + (1-L)\bigr),
 \end{align}
-where $1-L$ is the average monthly $1 - \bar E / \max E$ relative to no battery. Exports earn nothing, and because the
-clipping is applied to the district total, one building's export offsets another's import. All KPIs are ratios to no
-battery, so values below one are improvements. We report the Phase~I score $(C+G)/2$, used for the challenge's Phase~I
-leaderboard on these five buildings, and the score $S=(C+G+D)/3$, the challenge's overall formula.
+where $C$ is the cost, $G$ the carbon emissions, $R$ the ramping and $1-L$ the mean monthly value of $1 - \bar E / \max E$
+relative to no battery. The grid KPI $D$ averages the last two. Exports earn nothing, and the clipping applies to
+the district total, so one home's export offsets another's import. All KPIs are ratios to the no-battery run,
+so values below one are gains. The score of a district $d$ is $S_d=(C+G+D)/3$. The first phase of the challenge ranked
+entries by $(C+G)/2$ on the training buildings, which we call the Phase~I score. The final phase ranked them by a
+\emph{public} score $0.4\,S_\mathrm{train} + 0.6\,S_\mathrm{val}$. It chose the winners by a \emph{private} score
+$0.2\,S_\mathrm{train} + 0.3\,S_\mathrm{val} + 0.5\,S_\mathrm{test}$ \cite{nweye2023challenge}.
 
-\section{Methods}\label{sec:method}
+\section{Proposed Methodology: RL-Tuned MPC}\label{sec:method}
 
-\subsection{Agents}
-\emph{Central} agents control all five batteries with one policy. \emph{Decentralised} agents share one policy across
-buildings (parameter sharing): each building observes its own values plus a one-hot building identifier and outputs its own
-action. We train PPO \cite{schulman2017ppo} and SAC \cite{haarnoja2018sac} agents with Stable-Baselines3
-\cite{raffin2021sb3}, and TQC \cite{kuznetsov2020tqc} and CrossQ \cite{bhatt2024crossq} agents with its sb3-contrib
-extension. We also test a residual agent whose action is added to the action of the rule-based controller (RBC)
-supplied with CityLearn, and variants with running normalisation of observations and rewards.
+\begin{figure*}[!t]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+  font=\footnotesize, >={Stealth[length=2.2mm]},
+  box/.style={draw, rounded corners=2pt, align=center, inner sep=4pt, minimum height=11mm, fill=white},
+  obs/.style={box, fill=gray!10, text width=33mm},
+  fc/.style={box, fill=blue!7, text width=36mm},
+  rl/.style={box, fill=red!8, text width=40mm},
+  opt/.style={box, fill=green!8, text width=40mm},
+  env/.style={box, fill=orange!10, text width=34mm},
+  train/.style={box, dashed, fill=red!3, text width=38mm},
+  lab/.style={font=\scriptsize, align=center},
+  flow/.style={->, thick},
+  tflow/.style={->, thick, dashed, red!60!black}]
 
-\subsection{Reward Families}
-We compare eight reward families (Table~\ref{tab:main}): (i) the negative cost of each building; (ii) cost plus a static
-carbon weight; (iii) cost plus a carbon weight proportional to the current carbon intensity, or active only in the
-dirtiest 25\% of hours; (iv) a multi-KPI reward
-\begin{equation}
-  r_t = -\bigl(\hat c_t + \mu_g \hat g_t + \mu_r \hat r_t + \mu_p \hat p_t + w_b \hat b_t\bigr),
-\end{equation}
-whose terms are cost, carbon, ramping $|E_t-E_{t-1}|$, the increase of the daily peak, and battery wear
-$\sum_i |\mathrm{SoC}_{i,t}-\mathrm{SoC}_{i,t-1}|$, each divided by its per-step mean under the RBC; (v) the same with
-\emph{adaptive} weights $\mu$, updated once per simulated week in the style of Dynamic Weight Average \cite{liu2019dwa}:
-the weight moves toward the KPI furthest behind its target, with a floor so that no KPI is ignored and a fixed total;
-(vi) cost and carbon plus a squared-load penalty; (vii) a \emph{counterfactual} multi-KPI reward that adds back the same
-weighted terms of the no-battery run in the same hour; and (viii) the \emph{score-aligned} rewards described next.
+\node[obs] (obs) at (0,0) {\textbf{Observations at hour $t$}\\[1pt] building load, PV, SoC,\\ net load, weather and its\\
+  6/12/24-h forecasts, tariff,\\ carbon intensity};
+\node[fc] (lgb) at (4.8,1.3) {\textbf{LightGBM forecasters}\\[1pt] load and PV of every home,\\
+  $h = 1,\dots,H$\\ \scriptsize trained and tuned on other districts};
+\node[fc] (seas) at (4.8,-0.9) {\textbf{Seasonal forecasters}\\[1pt] carbon intensity and price};
+\begin{scope}[on background layer]
+\node[draw, dashed, rounded corners=3pt, fill=blue!2, inner sep=5pt, fit=(lgb)(seas),
+      label={[lab]above:Forecasting module}] (fcm) {};
+\end{scope}
+\node[opt] (mpc) at (11.2,1.3) {\textbf{MPC: linear program}\\[1pt]
+  horizon $H = 30$\,h, all batteries\\ min cost $+\,w_g$\,carbon $+\,w_r$\,ramping\\ $-\,v$\,stored energy\\[2pt]
+  apply the first hour of the plan};
+\node[rl] (actor) at (11.2,-1.9) {\textbf{RL weight tuner} (TQC actor)\\[1pt]
+  district-level state $s_t$: forecasts,\\ time, mean SoC, month peak,\\ recent forecast error\\[2pt]
+  $a_t \in [-1,1]^3 \;\Rightarrow\; w_r = 2\cdot 4^{a_1},$\\ $w_g = 2^{a_2},\; v(1 + a_3/2)$};
+\node[env] (envn) at (16.4,1.3) {\textbf{CityLearn district}\\[1pt] $N$ homes, each with load,\\ PV and a
+  6.4\,kWh / 5\,kW battery};
+\node[train] (critic) at (16.4,-1.9) {\textbf{Training only}\\[1pt] score-aligned counterfactual\\ reward $r_t$
+  $\rightarrow$ replay buffer\\ $\rightarrow$ truncated quantile critics};
 
-\subsection{Score-Aligned Counterfactual Reward}
-The proposed reward makes the per-step terms add up exactly to the numerators of the official KPIs and puts them on the
-scale of the KPIs. At hour $t$ we use the district-level clipped cost and emissions,
-\begin{equation}
-\begin{gathered}
-  \hat c_t = \frac{\max(0, E_t\pi_t)}{\bar c^{\,\mathrm{nb}}}, \qquad
-  \hat g_t = \frac{\max(0, E_t I_t)}{\bar g^{\,\mathrm{nb}}}, \\
-  \hat r_t = \frac{|E_t - E_{t-1}|}{\bar r^{\,\mathrm{nb}}},
-\end{gathered}
-\end{equation}
-where a bar denotes the per-step mean of the term in the no-battery run, so that $\sum_t \hat c_t = T\cdot C$: the yearly
-return is a linear function of the official KPIs. The peak term $\hat p_t$ is the increase of the running daily maximum of
-$E_t$, with the first hour of each day counting its full load, so that a day's terms sum to that day's peak (an earlier
-version without this correction let the agent hide a peak in the first hour of the day). The reward is
-\begin{equation}
-  \begin{split}
-  r_t = &-\bigl(\hat c_t + w_g\hat g_t + w_r\hat r_t + w_p\hat p_t + w_b\hat b_t\bigr) \\
-        &+ \bigl(\hat c^{\,\mathrm{nb}}_t + w_g\hat g^{\,\mathrm{nb}}_t + w_r\hat r^{\,\mathrm{nb}}_t + w_p\hat p^{\,\mathrm{nb}}_t\bigr).
-  \end{split}
-  \label{eq:reward}
-\end{equation}
-The second bracket is the value of the same terms had the batteries stayed idle in that hour. It depends only on exogenous
-data, not on the actions or the battery state, so it leaves the optimal policy unchanged
-\cite{ng1999shaping}, but it removes most of the demand-driven variation from the reward: the agent is rewarded for the
-\emph{improvement} it causes. In a deployed system this baseline is computable in real time from the measured net load and
-the battery's own power. The weights mirror the score $S=(C+G+(R+1-L)/2)/3$: cost weight 1, ramping and peak $0.5$ each
-(the peak term serves as a per-step proxy for the load factor), and battery wear $w_b=0.1$. We study three weightings:
-\emph{score-aligned} ($w_g=1$), \emph{Phase~I-aligned} ($w_g=1$, $w_r=w_p=0.2$) and \emph{score-aligned with carbon
-weight 2} ($w_g=2$), which places extra emphasis on emissions.
+% data flow
+\draw[flow] (obs.east) -- ++(4mm,0) |- (lgb.west);
+\draw[flow] (obs.east) -- ++(4mm,0) |- (seas.west);
+\draw[flow] (lgb.east -| fcm.east) -- node[lab, above]{$\hat B_{t+1:t+H},\ \hat I,\ \hat\pi$} (lgb.east -| mpc.west);
+\draw[flow] (seas.east -| fcm.east) -- ++(6mm,0) |- node[lab, pos=0.75, below]{forecast summary} ([yshift=4mm]actor.west);
+\draw[flow] (actor.north) -- node[lab, right]{weights $w_r, w_g, v$} (mpc.south);
+\draw[flow] (mpc.east) -- node[lab, above]{target SoC}node[lab, below]{$\Rightarrow$ actions} (envn.west);
+\draw[flow] (envn.north) -- ++(0,6mm) -| node[lab, pos=0.25, above]{next hour: new measurements} (obs.north);
+\draw[flow] (obs.south) |- node[lab, pos=0.75, below]{SoC, load, time} ([yshift=-6mm]actor.south) -- (actor.south);
+% training flow
+\draw[tflow] (envn.south) -- node[lab, right]{KPI terms} (critic.north);
+\draw[tflow] (critic.west) -- node[lab, above]{policy}node[lab, below]{update} (actor.east);
+\end{tikzpicture}}
+\caption{Architecture of the proposed RL-tuned MPC. Every hour, leakage-free forecasters predict the next $H$ hours. The
+RL agent maps a district-level state to three weights of a linear program, and the first hour of the program's plan is
+applied to the batteries. Dashed parts are used only during training.}
+\label{fig:arch}
+\end{figure*}
 
-\subsection{Forecasting and Model Predictive Control}\label{sec:mpc}
-\emph{Forecasters.} Each hour, the controller forecasts every building's non-shiftable load and PV generation, the carbon
-intensity and the price for the next $H=24$ hours, using only data observed so far. The \emph{seasonal} forecaster
-averages the same hour yesterday with the same hour over the last week and adds the current forecast error, decaying as
-$0.8^h$ over the horizon; prices repeat the same hour one week earlier. The \emph{LightGBM} forecasters
-\cite{ke2017lightgbm} predict load and PV for each horizon from recent and lagged values, seven-day same-hour means, the
-calendar, the current weather and the environment's own weather forecasts for the target hour. All value features are
-divided by the building's mean absolute value over the past week, so a model trained on some buildings applies to others,
-and the model used for a district is trained only on the buildings of the other two districts (leave-district-out).
-In the \emph{tuned} variant, the LightGBM hyperparameters are chosen with Optuna \cite{akiba2019optuna} by
-cross-validation between those two districts, so the controlled district is not used for tuning either.
+Fig.~\ref{fig:arch} shows the controller. Every hour it runs four steps. It forecasts the next $H = 30$ hours. The RL
+agent then sets three weights from a small district-level state. A linear program, which we call the solver, uses these
+weights to plan all batteries over the horizon. Only the first hour of the plan is applied, and the cycle repeats an hour later. The
+subsections below describe the three parts.
 
-\emph{District-total forecasters.} The grid KPIs depend on the district's total load, which is far more predictable
-than any single building's (Section~\ref{sec:fcvalue}). We therefore also forecast that total directly for the next
-24 hours and rescale the per-building load forecasts so that they add up to it. The direct models are trained on
-\emph{pseudo-districts}: random groups of the other two districts' buildings, redrawn during training, so that a model
-sees many districts of different sizes and is never trained on the district it forecasts. The deep models' inputs are
-the past two weeks of the total and its same-hour means over the past four weeks, both divided by the total's mean over
-the past week, the weather, the forecasts of it already issued for the next 24 hours, and the calendar. Three kinds of
-models are compared: a LightGBM model, deep
-models trained on a GPU (F2: an MLP and a patch Transformer), and the result of an automated search (F3): Optuna
-\cite{akiba2019optuna}, 30 trials per district, over five families (an MLP with learned hour and weekday embeddings, a GRU,
-a temporal convolutional network, N-BEATS and PatchTST) and their hyperparameters, chosen by cross-validation between the
-two other districts (fit on pseudo-districts of one, scored on the real total of the other), with the next six hours
-weighted more in the loss. The chosen configuration is trained with three seeds whose forecasts are averaged. The MPC
-uses the mean of the LightGBM and the deep total forecasts.
+\subsection{Forecasting Module}\label{sec:fc}
+Each hour the controller forecasts every home's load and PV output, the carbon intensity and the price for the next
+$H$ hours. It uses only the data seen so far. One LightGBM model \cite{ke2017lightgbm} per quantity covers all horizons
+and homes. Its inputs are recent and lagged values, the mean of the same hour over the past seven days, the calendar,
+the current weather and the environment's weather forecast for the target hour. Each value input is divided by the
+home's mean absolute value over the past week. A model trained on some homes thus applies to others.
 
-\emph{MPC.} Given the forecast net load $\hat B_h$ of the district (load minus PV), prices $\hat\pi_h$ and carbon
-intensities $\hat I_h$, the MPC solves the linear program
+The model for a district is trained only on the homes of the other two districts, a scheme we call
+leave-district-out. Its settings are chosen with Optuna \cite{akiba2019optuna} by cross-validation between those two
+districts. The controlled district is thus used neither for training nor for tuning (Fig.~\ref{fig:protocol}). Carbon
+intensity and price follow simple seasonal rules. The carbon forecast averages the same hour yesterday and over the last
+week and adds the current error, which decays as $0.8^h$ over the horizon. The price forecast repeats the tariff of the
+same hour one week earlier.
+
+\begin{figure}[!t]
+\centering
+\begin{tikzpicture}[font=\scriptsize,
+  cell/.style={draw, minimum width=13mm, minimum height=6.5mm, align=center},
+  fcell/.style={cell, fill=blue!12}, ecell/.style={cell, fill=orange!25}, rcell/.style={cell, fill=red!12},
+  ncell/.style={cell, fill=gray!5}]
+\node[font=\scriptsize\bfseries, align=center] at (1.3,1.0) {Data of district};
+\node at (0,0.45) {Train}; \node at (1.3,0.45) {Validation}; \node at (2.6,0.45) {Test};
+\node[align=right, anchor=east] at (-0.8,0) {Controlling Train};
+\node[align=right, anchor=east] at (-0.8,-0.65) {Controlling Validation};
+\node[align=right, anchor=east] at (-0.8,-1.3) {Controlling Test};
+\node[ecell, rcell] at (0,0) {evaluate\\[-1pt] + RL};  \node[fcell] at (1.3,0) {forecaster}; \node[fcell] at (2.6,0) {forecaster};
+\node[fcell] at (0,-0.65) {forecaster}; \node[ecell] at (1.3,-0.65) {evaluate}; \node[fcell] at (2.6,-0.65) {forecaster};
+\node[fcell] at (0,-1.3) {forecaster}; \node[fcell] at (1.3,-1.3) {forecaster}; \node[ecell] at (2.6,-1.3) {evaluate};
+\end{tikzpicture}
+\caption{Leakage-free protocol. For each controlled district (rows), the forecasters are trained and tuned only on the
+other two districts. The RL tuner is trained once, on the training buildings, and runs unchanged on all three.}
+\label{fig:protocol}
+\end{figure}
+
+\subsection{Receding-Horizon Linear Program}\label{sec:mpc}
+The MPC receives the forecast net load of the district $\hat B_h$ (load minus PV), the prices $\hat\pi_h$ and the carbon
+intensities $\hat I_h$. It then solves
 \begin{equation}
 \begin{split}
 \min\; & \sum_{h=1}^{H} \Bigl(\tfrac{\hat\pi_h}{\bar c} + w_g \tfrac{\hat I_h}{\bar g}\Bigr) m_h
@@ -300,478 +289,272 @@ intensities $\hat I_h$, the MPC solves the linear program
 & s_{b,h} = s_{b,h-1} + \eta x^+_{b,h} - x^-_{b,h}/\eta,\; 0 \le s_{b,h} \le 6.4, \\
 & 0 \le x^\pm_{b,h} \le \min(5,\ 21 - 3.125\, s_{b,h-1}),
 \end{split}
+\label{eq:lp}
 \end{equation}
-where $m_h$ is the district import (exports earn nothing), $\rho_h$ the ramp, $s_{b,h}$ the energy stored in battery $b$
-(6.4\,kWh, 5\,kW, $\eta=\sqrt{0.9}$ each way, with CityLearn's power taper above 80\% charge), $\bar c, \bar g, \bar r$
-running no-battery means that put cost, carbon and ramping on the scale of the KPIs, and $v$ the median unit cost over the
-horizon, which values the energy left at its end. Only the first hour of the plan is applied, by moving each battery to
-its planned state of charge, and the problem is solved again one hour later (HiGHS, about 20\,ms).
+where $m_h$ is the district import, $\rho_h$ the ramp and $s_{b,h}$ the energy stored in battery $b$. The charge and
+discharge powers are $x^\pm_{b,h}$, with an efficiency of $\eta=\sqrt{0.9}$ each way. The last constraint models
+CityLearn's power taper above 80\% charge. The running no-battery means $\bar c$, $\bar g$ and $\bar r$ put cost, carbon
+and ramping on the scale of the KPIs. The weight $v$ is the median unit cost over the horizon and gives a value to
+the energy left at its end. Exports earn nothing, so only imports are priced.
 
-\emph{RL-tuned MPC.} A fixed weighting cannot adapt to the season, the forecast quality or the battery state. In the
-RL-tuned MPC an RL agent (TQC or SAC) outputs three numbers $a \in [-1,1]^3$ every hour that set the MPC's ramp weight
-$w_r = 2\cdot 4^{a_1}$, carbon weight $w_g = 2^{a_2}$ and end-of-horizon value $v(1 + a_3/2)$. Its observation is
-district-level: the 24-hour forecasts of net load, carbon intensity and price, the time of day and season, the mean state
-of charge, the current load and month peak, and the latest forecast error. Because nothing in it depends on the number of
-buildings, a policy trained on the 5 training buildings also controls the 7-building test district. It is trained with
-the score-aligned reward of (\ref{eq:reward}) for 100{,}000 environment steps on the training district.
+Only the first hour of the plan is applied. It moves each battery to its planned state of charge, and one
+hour later it solves the problem again with new forecasts (Fig.~\ref{fig:horizon}). The HiGHS solver needs about
+20\,ms per problem.
+
+\begin{figure}[!t]
+\centering
+\resizebox{\columnwidth}{!}{%
+\begin{tikzpicture}[font=\scriptsize, x=2.3mm, y=6mm]
+\foreach \r/\s/\lab in {0/0/hour $t$, 1/1/hour $t+1$, 2/2/hour $t+2$} {
+  \node[anchor=east] at (-1,-\r) {\lab};
+  \draw[fill=green!12] (\s,-\r-0.3) rectangle (\s+30,-\r+0.3);
+  \draw[fill=red!40] (\s,-\r-0.3) rectangle (\s+1,-\r+0.3);
+  \node at (\s+16,-\r) {plan for the next $H = 30$ hours};
+}
+\draw[->] (0,-2.8) -- (33,-2.8) node[below left] {time};
+\draw[fill=red!40] (0.5,-3.75) rectangle (1.5,-3.35); \node[anchor=west] at (2,-3.55) {applied to the batteries};
+\draw[fill=green!12] (14,-3.75) rectangle (15,-3.35); \node[anchor=west] at (15.5,-3.55) {planned, then discarded};
+\end{tikzpicture}}
+\caption{Receding horizon. Every hour the linear program plans 30 hours ahead with fresh forecasts and weights, and
+only the first hour is carried out.}
+\label{fig:horizon}
+\end{figure}
+
+\subsection{RL Weight Tuner}\label{sec:tuner}
+Fixed weights in (\ref{eq:lp}) cannot adapt to the season, the forecast quality or the battery state. The RL agent
+thus outputs three numbers $a_t \in [-1,1]^3$ every hour. They set the ramp weight $w_r = 2\cdot 4^{a_1}$, the
+carbon weight $w_g = 2^{a_2}$ and the end-of-horizon value $v(1 + a_3/2)$. Each weight is centred on a good fixed
+setting, so an action of zero gives a sound controller. The agent's state is district-level. It holds the forecasts of
+net load, carbon intensity and price over the horizon, and the time of day and season. It also holds the mean state of
+charge, the current load and month peak, and the latest forecast error. None of these depends on the number of homes. A policy trained on
+the five training buildings thus also controls the seven test buildings.
+
+\emph{Score-aligned counterfactual reward.} The reward is built so that its terms add up exactly to the numerators of
+the official KPIs, on their scale. At hour $t$ we use the district's clipped cost and emissions and its ramp,
+\begin{equation}
+\begin{gathered}
+  \hat c_t = \frac{\max(0, E_t\pi_t)}{\bar c^{\,\mathrm{nb}}}, \qquad
+  \hat g_t = \frac{\max(0, E_t I_t)}{\bar g^{\,\mathrm{nb}}}, \\
+  \hat r_t = \frac{|E_t - E_{t-1}|}{\bar r^{\,\mathrm{nb}}},
+\end{gathered}
+\end{equation}
+where a bar marks the mean of the term per step in the no-battery run. Then $\sum_t \hat c_t = T\cdot C$, so the return
+over a year is a linear function of the KPIs. The peak term $\hat p_t$ is the rise of the running daily
+maximum of $E_t$. The first hour of each day counts its full load, so the terms of a day add up to that day's peak. The
+wear term is $\hat b_t = \sum_i |\mathrm{SoC}_{i,t}-\mathrm{SoC}_{i,t-1}|$. The reward is
+\begin{equation}
+  \begin{split}
+  r_t = &-\bigl(\hat c_t + w_g\hat g_t + w_r\hat r_t + w_p\hat p_t + w_b\hat b_t\bigr) \\
+        &+ \bigl(\hat c^{\,\mathrm{nb}}_t + w_g\hat g^{\,\mathrm{nb}}_t + w_r\hat r^{\,\mathrm{nb}}_t + w_p\hat p^{\,\mathrm{nb}}_t\bigr).
+  \end{split}
+  \label{eq:reward}
+\end{equation}
+The second bracket holds the same terms for the case in which the batteries stayed idle in that hour. It depends only on
+outside data, not on the actions or the battery state. It thus leaves the optimal policy unchanged
+\cite{ng1999shaping}, but it removes most of the variation caused by demand. The agent is rewarded for the
+\emph{improvement} it causes, and a reward of zero means ``as good as no battery''. A real system can compute this
+baseline online from the measured net load and the battery's own power. The weights follow the score
+$S=(C+G+(R+1-L)/2)/3$. Cost has weight 1, ramping and peak have $w_r = w_p = 0.5$, and wear has $w_b=0.1$. The peak term
+stands in for the load factor at each step. A carbon weight of $w_g = 2$ puts extra weight on emissions.
+
+\emph{Algorithm.} We train the agent with TQC \cite{kuznetsov2020tqc}. It has an actor and two distributional critics
+with 25 quantiles each. The two largest quantiles of each critic are dropped when the target is formed. This limits the
+over-estimation that a noisy, long-horizon reward invites. Training uses the training district only. At evaluation the
+actor acts deterministically.
 
 \section{Experimental Setup}\label{sec:setup}
-Every controller is trained for 200{,}000 environment steps (about 22.8 simulated years) and then evaluated with its
-deterministic policy over the full year. Each configuration is run with three seeds (42, 100, 2026), and we report mean
-$\pm$ standard deviation. SAC uses a learning rate of $3\cdot10^{-4}$, a replay buffer of 200{,}000 transitions, batch size
-256, $\tau=0.005$, $\gamma=0.99$, one gradient step per environment step, 1{,}000 random warm-up steps, automatic entropy
-tuning and two hidden layers of 64 units. TQC uses the same settings, with two critics of 25 quantiles each and the top
-two quantiles of each critic dropped; CrossQ uses a learning rate of $10^{-3}$, no target networks and its default
-policy delay of 3. PPO uses rollouts of 2{,}048 steps, batch size 128, 10 epochs, $\gamma=0.99$,
-GAE $\lambda=0.95$, clip range 0.2 and two hidden layers of 64 units. The references are no battery (all KPIs equal to one)
-and CityLearn's \texttt{BasicRBC}. To test generalisation, the trained central policies are run without any retraining on
-the five unseen buildings of \texttt{citylearn\_challenge\_2022\_phase\_2}, which share the observation and action layout,
-and the KPIs are computed against the no-battery run on those buildings.
+The tuner is trained for 100{,}000 environment steps, about 11.4 simulated years, on the five training buildings. The
+learning rate is $3\cdot10^{-4}$, the replay buffer holds 200{,}000 transitions and the batch size is 256. We use
+$\tau=0.005$, $\gamma=0.99$, one gradient step per environment step, 1{,}000 warm-up steps and automatic entropy tuning.
+The actor and each critic have two hidden layers of 64 units. We run three seeds (42, 100 and 2026) and report the mean
+and standard deviation.
 
-\emph{Phase~III protocol.} The challenge's final ranking used three districts: the 5 training buildings (1--5), 5 hidden
-validation buildings (6--10) and 7 hidden test buildings (11--17). With $S_d = (C+G+D)/3$ for district $d$, the public
-score is $0.4\,S_\mathrm{train} + 0.6\,S_\mathrm{val}$ and the private score, used to select the winners, is
-$0.2\,S_\mathrm{train} + 0.3\,S_\mathrm{val} + 0.5\,S_\mathrm{test}$ \cite{nweye2023challenge}. All 17 buildings are
-available in CityLearn 2.1.2, so we compute both scores ourselves with the official KPI formulas; this is not the
-challenge's own evaluator. The MPC-based controllers are deterministic; the RL-tuned MPCs are reported for seed 42.
+\emph{Evaluation.} The trained policy runs without retraining on each district for the full year. In each district the
+forecasters have never seen its homes. The KPIs are computed against the no-battery run on the same homes.
+CityLearn 2.1.2 contains all 17 homes, so we compute the public and private scores ourselves with the official
+formulas. These are not the scores of the challenge's own evaluator. The references are no battery, where every
+KPI equals one, and the rule-based controller (RBC) supplied with CityLearn.
+
+\emph{Ablations.} Each ablation changes one part of the controller and keeps the same protocol. We replace the RL tuner
+with the best fixed weights we found (ramp weight 3, carbon weight 1, 24-hour horizon). We try horizons of 24 and
+36 hours. We replace the tuned LightGBM settings with the defaults, and the LightGBM load and PV forecasts with seasonal
+ones. We use SAC instead of TQC. Last, we remove the solver: a TQC agent with the same reward then sets the battery
+rates directly, from the observations plus past-only history features, over 200{,}000 steps. Ablations with one seed use
+seed 42.
 
 \section{Results}\label{sec:results}
 
-\subsection{Overall Comparison}
-Table~\ref{tab:main} and Fig.~\ref{fig:methods} summarise the official KPIs of all controllers. The RBC is worse than
-leaving the batteries idle on every KPI (Phase~I 1.132): it charges and discharges on a fixed schedule that ignores the
-tariff, the carbon intensity and PV. PPO with the per-building cost or carbon-weighted rewards reduces cost by 6--8\% but
-\emph{increases} emissions and grid ramping (Phase~I 0.98--1.01, $D\approx 1.5$), so it is no better than idling. Multi-KPI
-rewards help PPO (0.950 with adaptive weights), and a squared-load penalty gives the best PPO result (0.900).
+\subsection{Main Results}
+The controller improves every KPI in every district (Table~\ref{tab:main}, Fig.~\ref{fig:kpis}). On the training
+homes it lowers the cost by 34.3\% and the emissions by 22.2\% relative to no battery. It also smooths the district
+load, with $R = 0.823$, $1-L = 0.977$ and $D = 0.900$. The RBC, in contrast, is worse than idle batteries on every
+KPI. It charges and discharges on a fixed schedule that ignores the tariff, the carbon intensity and the PV.
 
-Switching to SAC is the largest single step: with the same fixed multi-KPI reward, Phase~I falls from 0.959 (PPO, M2)
-to 0.881 (SAC, M12). The counterfactual baseline then lowers it to 0.829 (M20), and making the terms exactly the official,
-district-level, no-battery-scaled ones lowers it to 0.786 (M26). Doubling the carbon weight gives the best SAC controller,
-M27, with Phase~I $0.768\pm0.005$ and score $0.867\pm0.005$: cost $-28.0\%$ and emissions $-18.3\%$ relative to no
-battery, and a 22\% lower Phase~I score than the best reward of the earlier carbon-weighting baselines (B3, 0.984).
-Replacing SAC by TQC \cite{kuznetsov2020tqc} with otherwise identical settings (M110) keeps the Phase~I score
-($0.768\pm0.004$) and lowers ramping, giving the best overall score of the pure RL controllers, $0.861\pm0.003$, with the smallest
-spread between seeds. Adding the past-only history features of Section~\ref{sec:extra} to TQC (M113) gives the best
-Phase~I score, $0.763\pm0.005$, with cost $-29.1\%$ and emissions $-18.4\%$ relative to no battery.
+The gains carry over to homes the controller has never seen. On the validation buildings the cost falls by 34.5\%
+and the emissions by 24.5\%. The scores of the training and validation districts are almost equal ($S = 0.778$ and
+0.771), so the controller is not fitted to its training buildings. The seven test buildings differ most from the
+training ones and gain less ($S = 0.914$). There the cost falls by 19.9\% and the emissions by 4.1\%. The three seeds
+agree closely, with a standard deviation of at most 0.006 for every score.
 
 \begin{table}[!t]
 \centering
-\caption{Official KPIs relative to no battery (lower is better), mean over three seeds ($\pm$ standard deviation for the
-two scores). Best value of each column in bold.}
+\caption{The proposed RL-tuned MPC in each district. Indicators relative to no battery (lower is better), mean of three
+seeds, $\pm$ standard deviation for the scores. The policy is trained on the training buildings only.}
 \label{tab:main}
 \setlength{\tabcolsep}{3pt}
-\footnotesize
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}llccccc@{}}
 \toprule
-ID & Controller & Phase I & Score $S$ & $C$ & $G$ & $D$ \\
+District & Controller & $C$ & $G$ & $D$ & Phase I & $S$ \\
 \midrule
---  & No battery                       & 1.000 & 1.000 & 1.000 & 1.000 & \textbf{1.000} \\
-B0  & RBC (CityLearn)                  & 1.132 & 1.113 & 1.070 & 1.193 & 1.075 \\
+\multirow{3}{*}{Train (1--5)} & No battery & 1.000 & 1.000 & 1.000 & 1.000 & 1.000 \\
+                              & RBC        & 1.070 & 1.193 & 1.075 & 1.132 & 1.113 \\
+                              & \textbf{RL-tuned MPC} & \textbf{0.657} & \textbf{0.778} & \textbf{0.900} &
+                                \textbf{0.717}{\scriptsize$\pm$.002} & \textbf{0.778}{\scriptsize$\pm$.002} \\
 \midrule
-B1  & PPO, cost only                   & 1.004{\scriptsize$\pm$.004} & 1.174{\scriptsize$\pm$.015} & 0.939 & 1.070 & 1.515 \\
-B3  & PPO, static carbon               & 0.984{\scriptsize$\pm$.022} & 1.144{\scriptsize$\pm$.032} & 0.918 & 1.050 & 1.464 \\
-B4  & PPO, dynamic carbon              & 1.007{\scriptsize$\pm$.068} & 1.181{\scriptsize$\pm$.088} & 0.942 & 1.072 & 1.530 \\
-M2  & PPO, multi-KPI fixed             & 0.959{\scriptsize$\pm$.034} & 1.068{\scriptsize$\pm$.051} & 0.937 & 0.981 & 1.285 \\
-M3  & PPO, multi-KPI adaptive          & 0.950{\scriptsize$\pm$.023} & 1.077{\scriptsize$\pm$.026} & 0.923 & 0.978 & 1.330 \\
-M9  & PPO, cost + carbon + load$^2$    & 0.900{\scriptsize$\pm$.004} & 1.061{\scriptsize$\pm$.013} & 0.833 & 0.967 & 1.382 \\
-M5  & PPO, decentralised adaptive      & 1.001{\scriptsize$\pm$.000} & 1.003{\scriptsize$\pm$.000} & 1.001 & 1.001 & 1.006 \\
+Validation (6--10) & \textbf{RL-tuned MPC} & 0.655 & 0.755 & 0.904 & 0.705 & 0.771{\scriptsize$\pm$.003} \\
+Test (11--17)      & \textbf{RL-tuned MPC} & 0.801 & 0.959 & 0.982 & 0.880 & 0.914{\scriptsize$\pm$.006} \\
 \midrule
-M12 & SAC, multi-KPI fixed             & 0.881{\scriptsize$\pm$.020} & 0.982{\scriptsize$\pm$.032} & 0.831 & 0.931 & 1.184 \\
-M13 & SAC, + obs.\ and reward norm.    & 0.966{\scriptsize$\pm$.053} & 1.004{\scriptsize$\pm$.024} & 0.952 & 0.980 & 1.081 \\
-M16 & SAC, residual on RBC             & 0.956{\scriptsize$\pm$.026} & 1.007{\scriptsize$\pm$.014} & 0.933 & 0.978 & 1.111 \\
-M19 & SAC, multi-KPI, carbon 2         & 0.890{\scriptsize$\pm$.017} & 0.981{\scriptsize$\pm$.022} & 0.841 & 0.940 & 1.163 \\
-M20 & SAC, counterfactual              & 0.829{\scriptsize$\pm$.003} & 0.917{\scriptsize$\pm$.009} & 0.781 & 0.877 & 1.091 \\
-M26 & SAC, score-aligned               & 0.786{\scriptsize$\pm$.008} & 0.870{\scriptsize$\pm$.006} & 0.732 & 0.840 & 1.036 \\
-M28 & SAC, Phase I-aligned             & 0.779{\scriptsize$\pm$.003} & 0.876{\scriptsize$\pm$.001} & 0.727 & 0.831 & 1.071 \\
-M27 & SAC, score-aligned, carbon 2     & 0.768{\scriptsize$\pm$.005} & 0.867{\scriptsize$\pm$.005} & 0.720 & 0.817 & 1.064 \\
-\midrule
-M110 & TQC, score-aligned, carbon 2    & 0.768{\scriptsize$\pm$.004} & \textbf{0.861}{\scriptsize$\pm$.003} & 0.720 & \textbf{0.816} & 1.046 \\
-M113 & TQC + history features          & \textbf{0.763}{\scriptsize$\pm$.005} & 0.862{\scriptsize$\pm$.006} & \textbf{0.709} & \textbf{0.816} & 1.060 \\
+\multicolumn{5}{@{}l}{Phase~III public score $0.4\,S_\mathrm{train}+0.6\,S_\mathrm{val}$} & \multicolumn{2}{r@{}}{$0.774 \pm 0.003$} \\
+\multicolumn{5}{@{}l}{Phase~III private score $0.2\,S_\mathrm{train}+0.3\,S_\mathrm{val}+0.5\,S_\mathrm{test}$} & \multicolumn{2}{r@{}}{$0.844 \pm 0.004$} \\
 \bottomrule
 \end{tabular}}
 \end{table}
 
 \begin{figure}[!t]
 \centering
-\includegraphics[width=\columnwidth]{fig_methods.pdf}
-\caption{Cost $C$, carbon $G$ and Phase~I score of representative controllers relative to no battery (dashed line); error
-bars show the standard deviation over three seeds.}
-\label{fig:methods}
+\includegraphics[width=\columnwidth]{fig_rltuned_kpis.pdf}
+\caption{Cost, carbon, grid KPI and score of the RL-tuned MPC in each district, relative to no battery (dashed
+line). Error bars show the standard deviation over three seeds.}
+\label{fig:kpis}
 \end{figure}
 
-\subsection{The Three Best Controllers}
-The three score-aligned SAC controllers are the best SAC controllers of the study and are remarkably consistent across
-seeds
-(Table~\ref{tab:top3}): the standard deviation of the Phase~I score is at most 0.008. Raising the carbon weight from 1 (M26)
-to 2 (M27) lowers emissions from 0.840 to 0.817 and, because cheap hours are often also clean, cost from 0.732 to 0.720, at
-the price of more ramping ($R$ 1.101 to 1.156). Lowering the grid weights (M28) gives an intermediate result. All three
-improve the load factor ($1-L<1$) but increase ramping relative to no battery, so their grid KPI $D$ stays slightly above
-one.
-
-\begin{table}[!t]
-\centering
-\caption{The three best SAC controllers: KPIs (mean $\pm$ std over seeds 42, 100, 2026).}
-\label{tab:top3}
-\setlength{\tabcolsep}{2.5pt}
-\footnotesize
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}lccc@{}}
-\toprule
-KPI & M27 (carbon 2) & M28 (Phase I-aligned) & M26 (score-aligned) \\
-\midrule
-Cost $C$          & \textbf{0.720}$\pm$0.006 & 0.727$\pm$0.004 & 0.732$\pm$0.010 \\
-Carbon $G$        & \textbf{0.817}$\pm$0.003 & 0.831$\pm$0.003 & 0.840$\pm$0.007 \\
-Ramping $R$       & 1.156 & 1.167 & \textbf{1.101} \\
-$1-L$             & 0.972 & 0.975 & \textbf{0.971} \\
-Grid $D$          & 1.064 & 1.071 & \textbf{1.036} \\
-Phase I $(C+G)/2$ & \textbf{0.768}$\pm$0.005 & 0.779$\pm$0.003 & 0.786$\pm$0.008 \\
-Score $S$         & \textbf{0.867}$\pm$0.005 & 0.876$\pm$0.001 & 0.870$\pm$0.006 \\
-\bottomrule
-\end{tabular}}
-\end{table}
-
-\subsection{Ablations and Negative Results}
-\emph{Off-policy learning.} With identical rewards SAC beats PPO by a wide margin (M2 vs.\ M12), consistent with its
-better sample efficiency on long-horizon continuous control; 200{,}000 steps correspond to only about 23 simulated years.
-
-\emph{Counterfactual baseline.} Adding back the no-battery terms (M12 to M20) lowers Phase~I from 0.881 to 0.829 and
-reduces the seed-to-seed spread from 0.020 to 0.003. The baseline does not change the optimal policy, so this gain comes
-entirely from lower-variance critic targets.
-
-\emph{KPI-exact terms.} Replacing per-building bills by district-level clipped cost and emissions and scaling by the
-no-battery reference (M20 to M26) gives a further 0.043. The per-building bill rewards exports that the official cost does
-not, and ignores that buildings offset each other.
-
-\emph{Normalisation hurts.} Running normalisation of observations and rewards (M13) worsens SAC from 0.881 to 0.966 and
-makes it far less stable across seeds; normalising only observations (M17, 0.886) is neutral.
-
-\emph{Decentralised PPO collapses.} Shared per-building PPO policies with adaptive weights (M5, M6) converge to leaving
-the batteries idle (all KPIs 1.00), and adding district-level penalties (M10, M11) does not prevent it. A central SAC agent with the counterfactual reward,
-carbon weight 2 and per-building (non-official) cost and carbon terms also collapsed to idling (M21, one seed), which
-motivated the KPI-exact terms of M26--M28.
-
-\emph{Residual RL.} Learning a correction on top of the RBC (M16, 0.956) is worse than learning from scratch, because the
-RBC itself is a poor starting point.
-
-\subsection{Learning Dynamics and Learned Behaviour}
-With the counterfactual reward of (\ref{eq:reward}), the mean reward per step is the weighted KPI improvement over
-idling, so zero means ``as good as no battery''. Fig.~\ref{fig:learning} shows it for the training episodes of M27 and
-M26. Both start far below zero (random exploration in the first year), cross zero in the second episode and approach their
-final level after about six to ten episodes; the three seeds of each method follow almost the same curve. The higher
-plateau of M27 reflects its doubled carbon weight, which scales its reward, rather than a better policy per se.
-Fig.~\ref{fig:week} shows one summer week of the learned policy: the batteries charge from about 09:00 to 14:00, when PV
-covers the load, and discharge from the late afternoon through the evening and night, covering the tariff peak
-(16:00--21:00) and the hours of highest carbon intensity, which lowers the evening import peak.
+\subsection{Learned Behaviour}
+Fig.~\ref{fig:daily} shows the average day on the training buildings. With no batteries, the district exports up to
+5\,kW of PV at midday for nothing and imports about 6\,kW in the evening. The controller stores the midday surplus. The
+mean state of charge rises from under 10\% at dawn to about 87\% at 14:00. The batteries then discharge through the peak
+tariff from 16:00 to 21:00 and into the night. The net load stays between about 0 and 4.5\,kW across the day, so the
+grid sees a much flatter profile.
 
 \begin{figure}[!t]
 \centering
-\includegraphics[width=\columnwidth]{fig_learning.pdf}
-\caption{Mean per-step training reward (weighted KPI improvement over no battery; 0 = as good as idling) of M27 and M26,
-three seeds each (solid: 42, dashed: 100, dotted: 2026).}
-\label{fig:learning}
+\includegraphics[width=\columnwidth]{fig_rltuned_daily.pdf}
+\caption{Average daily profile over the year on the training buildings (seed 42): district net load with and without
+batteries, and the mean state of charge.}
+\label{fig:daily}
 \end{figure}
+
+Fig.~\ref{fig:week} shows one July week in detail. The daily pattern repeats, but the plot also reveals the
+controller's weak point. On one day it tops up from the grid in the last cheap hour before the peak tariff, which
+creates a short import spike. Such spikes cost little in $C$ and $G$, but they raise the ramping and the monthly peak.
+This is why the grid KPI $D$ is the controller's weakest.
 
 \begin{figure}[!t]
 \centering
-\includegraphics[width=\columnwidth]{fig_week.pdf}
-\caption{One July week of M27 (seed 42): district net load with and without batteries, mean state of charge, and the
-price and carbon intensity the policy observes.}
+\includegraphics[width=\columnwidth]{fig_rltuned_week.pdf}
+\caption{One July week on the training buildings (seed 42): district net load with and without batteries, mean state of
+charge, and the price and carbon intensity.}
 \label{fig:week}
 \end{figure}
 
-\subsection{Generalisation to Unseen Buildings}
-Table~\ref{tab:transfer} reports the trained policies, unchanged, on the five unseen buildings of the challenge's
-phase~2 dataset. The score-aligned controllers keep their benefit: M27 reduces cost by 27.8\% (28.0\% on the training
-buildings) and emissions by 20.7\% (18.3\%), while the earlier SAC multi-KPI controller (M12) transfers much less
-well. The ranking on the unseen buildings follows the ranking on the training buildings, so the gains from reward design
-are not an artefact of fitting the five training buildings. The public formula of the challenge's Phase~III, $0.4\,S_\mathrm{train}+0.6\,S_\mathrm{unseen}$, gives
-$0.859\pm0.005$ for M27, $0.853\pm0.002$ for the TQC controller M110 and $0.854\pm0.001$ for TQC with history features
-(M113). M113 also gives the largest savings on the unseen buildings: cost $-29.1\%$ and emissions $-20.9\%$.
+With the reward of (\ref{eq:reward}), the mean reward per step is the weighted gain over idle batteries
+(Fig.~\ref{fig:learning}). The tuner starts from the weights of a good fixed MPC. Even the first, partly random year
+thus earns 0.84 per step, far above zero. Learning raises the reward by about 4\% within five simulated years, and
+it then stays flat. One seed (2026) levels off at a lower training reward. Its public score (0.777) still lies within
+one standard deviation of the others. Once the solver handles the schedule, the remaining differences in the weights
+matter little.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{fig_rltuned_learning.pdf}
+\caption{Mean training reward per step of the RL weight tuner, three seeds. The reward is the weighted gain over no
+battery, so zero means as good as idle batteries.}
+\label{fig:learning}
+\end{figure}
+
+\subsection{Ablations}
+Table~\ref{tab:ablation} changes one component at a time.
+
+\emph{The solver matters most.} Without it, an RL agent with the same reward sets the battery rates directly. Even
+with history features and twice the training, it reaches only $S = 0.862$ on the training buildings and a public score of
+0.854. It must learn from the reward the daily structure that the forecasts and the linear program give explicitly, and
+it ramps more than idle batteries ($D = 1.06$).
+
+\emph{The RL tuning helps.} With the best fixed weights, the same solver scores 0.781 (public) and 0.846 (private).
+The tuner lowers these to 0.774 and 0.844, and the Phase~I score from 0.742 to 0.717. Most of the gain comes from cost,
+which falls from 0.703 to 0.657 on the training buildings, at the price of slightly more ramping. In effect, the tuner
+learns when the forecasts justify a more aggressive arbitrage.
+
+\emph{Good forecasts are needed.} With seasonal load and PV forecasts and a 24-hour horizon, the tuned controller loses
+most of its edge on new homes (public 0.807, private 0.864). It still does well on the training buildings
+(Phase~I 0.728). With poor forecasts, the agent learns weights that suit only the homes it was trained on. Tuning
+the LightGBM settings raises the PV accuracy from about 90\% to 96\%. At a 24-hour horizon it lowers the public score
+from 0.782 to 0.774.
+
+\emph{Other choices matter little.} Horizons of 24, 30 and 36 hours give public scores within 0.002 of each other. SAC
+instead of TQC gives $0.775 \pm 0.001$. The result thus depends on the architecture rather than on these settings.
 
 \begin{table}[!t]
 \centering
-\caption{Policies trained on the phase 1 buildings, evaluated without retraining on the five unseen phase 2 buildings
-(mean over three seeds; M12 and M20: seed 42 only).}
-\label{tab:transfer}
-\setlength{\tabcolsep}{3pt}
-\footnotesize
+\caption{Ablations of the RL-tuned MPC, one change at a time (lower is better). Phase~I and $S$ on the training
+homes, $S$ on the unseen validation and test buildings, and the Phase~III scores. Three seeds where marked $^\ast$,
+otherwise seed 42.}
+\label{tab:ablation}
+\setlength{\tabcolsep}{2.5pt}
 \resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}lccccc@{}}
+\begin{tabular}{@{}lcccccc@{}}
 \toprule
-Controller & $C$ & $G$ & $D$ & $S_\mathrm{unseen}$ & $0.4S_\mathrm{train}+0.6S_\mathrm{unseen}$ \\
+Variant & Phase I & $S_\mathrm{train}$ & $S_\mathrm{val}$ & $S_\mathrm{test}$ & Public & Private \\
 \midrule
-M12 SAC multi-KPI          & 0.811 & 0.893 & 1.099 & 0.934 & 0.946 \\
-M20 SAC counterfactual     & 0.777 & 0.848 & 1.066 & 0.897 & 0.905 \\
-M26 SAC score-aligned      & 0.736 & 0.815 & \textbf{1.021} & 0.857 & 0.862 \\
-M28 SAC Phase I-aligned    & 0.723 & 0.809 & 1.050 & 0.861 & 0.867 \\
-M27 SAC score-aligned, c.\ 2 & 0.722 & 0.793 & 1.049 & 0.854 & 0.859 \\
-M112 M27 + history features  & 0.715 & 0.803 & 1.025 & \textbf{0.847} & 0.854 \\
-M110 TQC score-aligned, c.\ 2 & 0.718 & 0.793 & 1.032 & \textbf{0.847} & \textbf{0.853} \\
-M113 TQC + history features  & \textbf{0.709} & \textbf{0.791} & 1.046 & 0.849 & 0.854 \\
+\textbf{Proposed (TQC, tuned LightGBM, 30 h)}$^\ast$ & 0.717 & 0.778 & \textbf{0.771} & 0.914 & \textbf{0.774} & \textbf{0.844} \\
+\midrule
+Fixed weights instead of RL tuning    & 0.742 & 0.784 & 0.779 & 0.910 & 0.781 & 0.846 \\
+No solver: RL sets batteries$^\ast$ & 0.763 & 0.862 & 0.849 & --    & 0.854 & --    \\
+Seasonal load and PV forecasts, 24 h  & 0.728 & 0.809 & 0.806 & 0.921 & 0.807 & 0.864 \\
+Untuned LightGBM, 24 h$^\ast$          & 0.722 & 0.787 & 0.779 & \textbf{0.908} & 0.782 & 0.845 \\
+Horizon 24 h                          & 0.723 & \textbf{0.777} & 0.772 & 0.913 & \textbf{0.774} & \textbf{0.844} \\
+Horizon 36 h                          & 0.717 & 0.779 & 0.772 & 0.915 & 0.775 & 0.845 \\
+SAC instead of TQC (36 h)$^\ast$       & \textbf{0.715} & 0.778 & 0.772 & 0.915 & 0.775 & 0.845 \\
 \bottomrule
 \end{tabular}}
 \end{table}
 
-\subsection{Additional Algorithms, Architectures and Features}\label{sec:extra}
-Starting from M27, we screened further changes, one at a time, on a shorter budget of 60{,}000 steps (about seven
-simulated years) and seed 42 (Table~\ref{tab:screen}). The reference is M27 retrained with the same budget (M102), whose
-Phase~I score over three seeds is $0.794\pm0.016$ (seed 42: 0.803). The algorithms are TQC \cite{kuznetsov2020tqc}, with
-truncated distributional critics, and CrossQ \cite{bhatt2024crossq}, with batch-normalised critics and no target networks.
-The history features, computed only from past observations, are the cyclic hour and month and a persistence forecast
-taken from yesterday: the carbon intensity and the district load minus PV $24-h$ hours earlier for the next
-$h=1,2,3,6,12$ hours. The environment provides no forecast of carbon intensity or load, and both follow a daily pattern.
-The ``rich'' variant adds each building's own lagged load minus PV, the values 24 hours earlier and yesterday's mean and
-maximum; the ``dense'' variant uses every next hour from 1 to 12.
+\subsection{Comparison with the Challenge Leaderboards}
+On the public leaderboard of the final phase, the controller would rank 8th of 42 (Fig.~\ref{fig:leader},
+Table~\ref{tab:leader}). The leaderboard \cite{citylearn2022challenge} lists every entry's $C$, $G$ and $D$ as blends of
+the training and validation districts, and our row uses the same 0.4/0.6 blend. Our score of 0.774 lies between the 7th
+entry (0.767) and the 8th (0.789), and the winner reached 0.728.
 
-No change improved on the control by more than its seed-to-seed spread. The history features gave the best single run
-(0.774), but over three seeds they scored $0.808\pm0.030$, no better than the control; TQC (0.794) and the history
-variants with observation normalisation (0.787), a batch of 512 (0.787) or rich features (0.789) were also within one
-standard deviation. Larger
-networks, two gradient updates per step, a carbon weight of 3, $\gamma=0.95$ and CrossQ were slightly worse.
-Three-step returns, a faster target update ($\tau=0.02$) and a shared per-building SAC policy were clearly worse; the
-latter collapsed to idling, like the decentralised PPO agents. Averaging the actions of the three M27 seeds also hurt
-(Phase~I 0.841), because the averaged actions are too cautious. With the reward fixed, the choice of off-policy algorithm,
-network size and input features matters much less than the reward design and the training length.
+The picture changes from one KPI to the next (Table~\ref{tab:kpirank}). Our carbon score of 0.764 is the lowest of
+all 42 entries, 5\% below the best one (0.803). Our cost of 0.655 ranks 4th. The gap to the top lies almost entirely in
+the grid KPI, where our $D$ of 0.902 ranks 14th and the winner reaches 0.738. Our reward weights carbon twice as
+much as cost and gives up some grid smoothness for lower emissions. The carbon rank reflects this choice as much as the
+quality of the controller. Two factors favour the published entries. They trained their forecasters on the public
+homes that form 40\% of the public score, which ours never see, and their scores come from the official evaluator.
 
-\begin{table}[!t]
+\begin{figure*}[!t]
 \centering
-\caption{Screening of additional changes to M27 at 60{,}000 environment steps (Phase~I and score relative to no
-battery; seed 42 unless stated). Control: M27 at the same budget.}
-\label{tab:screen}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}llcccc@{}}
-\toprule
-ID & Change from M27 & Phase I & Score $S$ & $C$ & $G$ \\
-\midrule
-M102 & none (control), 3 seeds            & 0.794{\scriptsize$\pm$.016} & 0.882{\scriptsize$\pm$.006} & 0.751 & 0.838 \\
-M93  & history features, 3 seeds          & 0.808{\scriptsize$\pm$.030} & 0.887{\scriptsize$\pm$.010} & 0.769 & 0.847 \\
-\midrule
-M93  & history features (seed 42)         & 0.774 & 0.876 & 0.728 & 0.821 \\
-M105 & history + observation norm.        & 0.787 & 0.886 & 0.738 & 0.835 \\
-M107 & history, batch size 512            & 0.787 & 0.878 & 0.744 & 0.830 \\
-M103 & rich history                       & 0.789 & 0.876 & 0.746 & 0.832 \\
-M91  & TQC, 256$\times$256                & 0.794 & 0.887 & 0.750 & 0.838 \\
-M104 & dense history                      & 0.801 & 0.879 & 0.765 & 0.837 \\
-M96  & 256$\times$256 + history           & 0.801 & 0.884 & 0.755 & 0.847 \\
-M92  & CrossQ, 256$\times$256             & 0.805 & 0.892 & 0.768 & 0.842 \\
-M95  & $\gamma = 0.95$                    & 0.808 & 0.887 & 0.761 & 0.854 \\
-M90  & 256$\times$256 networks            & 0.809 & 0.899 & 0.764 & 0.853 \\
-M99  & 2 gradient steps per env step      & 0.809 & 0.898 & 0.772 & 0.847 \\
-M97  & TQC + history                      & 0.810 & 0.897 & 0.764 & 0.856 \\
-M106 & history, learning rate $10^{-3}$   & 0.810 & 0.898 & 0.768 & 0.852 \\
-M100 & CrossQ + history                   & 0.812 & 0.890 & 0.779 & 0.846 \\
-M101 & carbon weight 3                    & 0.813 & 0.892 & 0.767 & 0.860 \\
-M108 & history, $\tau = 0.02$             & 0.859 & 0.931 & 0.829 & 0.890 \\
-M94  & 3-step returns                     & 0.864 & 0.928 & 0.824 & 0.903 \\
-M98  & shared per-building policy         & 1.000 & 1.000 & 1.000 & 1.000 \\
-\bottomrule
-\end{tabular}}
-\end{table}
+\includegraphics[width=\textwidth]{fig_leaderboard.pdf}
+\caption{The proposed controller (red) among the 42 entries of the Phase~III public leaderboard. Left: public scores in
+rank order (dashed line: no battery). Right: carbon against grid KPI. No entry reaches lower emissions, but most
+of the top entries have a smoother grid profile.}
+\label{fig:leader}
+\end{figure*}
 
-\subsection{Full-Budget Tests and Training Length}
-Because screening at 60{,}000 steps is noisy, the most promising variants were retrained at the full budget with three
-seeds (Table~\ref{tab:full}). TQC (M110), the best algorithm in the screening, matches M27 on cost and carbon and
-improves the grid KPI ($D$ 1.046 vs.\ 1.064), giving the best score, $0.861\pm0.003$, with the smallest spread across
-seeds, consistent with the reduced over-estimation bias of its truncated distributional critics
-\cite{kuznetsov2020tqc}. The gain is not specific to one weighting: with the score-aligned reward of carbon weight 1,
-TQC (M114) improves on SAC (M26) from $0.786\pm0.008$ to $0.774\pm0.006$ in Phase~I and from 0.870 to 0.866 in score. With the history
-features (M112), the Phase~I score ($0.771\pm0.007$) is statistically
-indistinguishable from M27 ($0.768\pm0.005$): cost and the grid KPI improve slightly ($C$ 0.717, $D$ 1.048) while
-emissions rise slightly ($G$ 0.825). On the unseen buildings M112 is marginally better than M27 (public score
-$0.854\pm0.006$ vs.\ $0.859\pm0.005$, Table~\ref{tab:transfer}), mainly through a lower $D$. Stacking the rich history
-with observation normalisation (M111) is clearly worse ($0.795\pm0.008$). Combining the two best changes, TQC and the
-history features (M113), gives the best pure-RL Phase~I score, $0.763\pm0.005$, through a lower cost ($C$ 0.709)
-at unchanged emissions ($G$ 0.816), and the largest savings on the unseen buildings ($C$ 0.709, $G$ 0.791); its score
-($0.862\pm0.006$) equals that of TQC alone. With TQC, the persistence forecast of carbon intensity and net load thus helps
-the policy to schedule cheaper charging, while with SAC its benefit was within the seed-to-seed spread.
-
-Training length matters, but not monotonically. M27 scores $0.794\pm0.016$ after 60{,}000 steps, $0.768\pm0.005$ after
-200{,}000 and $0.786\pm0.013$ when training continues to 400{,}000 steps from the 200{,}000-step checkpoints (M109): with a
-constant learning rate and entropy target, the policy drifts after it has converged, and the spread between seeds grows
-again. Early stopping on a validation year, or a decaying learning rate, would be needed to exploit longer training.
-
-\begin{table}[!t]
-\centering
-\caption{Full-budget variants of M27 (three seeds, mean $\pm$ std; lower is better).}
-\label{tab:full}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}llccccc@{}}
-\toprule
-ID & Variant & Steps & Phase I & Score $S$ & $C$ & $G$ \\
-\midrule
-M102 & M27 (short budget)              & 60k  & 0.794{\scriptsize$\pm$.016} & 0.882{\scriptsize$\pm$.006} & 0.751 & 0.838 \\
-M27  & proposed (SAC)                  & 200k & 0.768{\scriptsize$\pm$.005} & 0.867{\scriptsize$\pm$.005} & 0.720 & 0.817 \\
-M112 & + history features              & 200k & 0.771{\scriptsize$\pm$.007} & 0.863{\scriptsize$\pm$.004} & 0.717 & 0.825 \\
-M111 & + rich history + obs.\ norm.    & 200k & 0.795{\scriptsize$\pm$.008} & 0.891{\scriptsize$\pm$.009} & 0.747 & 0.843 \\
-M109 & M27 trained longer              & 400k & 0.786{\scriptsize$\pm$.013} & 0.885{\scriptsize$\pm$.018} & 0.738 & 0.833 \\
-M110 & TQC instead of SAC              & 200k & 0.768{\scriptsize$\pm$.004} & \textbf{0.861}{\scriptsize$\pm$.003} & 0.720 & \textbf{0.816} \\
-M113 & TQC + history features          & 200k & \textbf{0.763}{\scriptsize$\pm$.005} & 0.862{\scriptsize$\pm$.006} & \textbf{0.709} & \textbf{0.816} \\
-\midrule
-M26  & SAC, carbon weight 1            & 200k & 0.786{\scriptsize$\pm$.008} & 0.870{\scriptsize$\pm$.006} & 0.732 & 0.840 \\
-M114 & TQC, carbon weight 1            & 200k & 0.774{\scriptsize$\pm$.006} & 0.866{\scriptsize$\pm$.004} & 0.721 & 0.826 \\
-\bottomrule
-\end{tabular}}
-\end{table}
-
-\subsection{Forecasting, MPC and RL-Tuned MPC}\label{sec:mpcres}
-Table~\ref{tab:fc} compares the forecasters. PV is easy to forecast ($R^2 \ge 0.95$), but household load is not ($R^2$ of
-0.36--0.57, about 40\% normalised error); LightGBM reduces the district net-load error by 3--14\% over the seasonal
-forecaster, least on the test district, whose buildings differ most from the training ones. Blending the two forecasts with
-an online self-correction made the plans jumpier and was discarded (Phase~III public 0.847).
-
-\begin{table}[!t]
-\centering
-\caption{Forecast accuracy: district net-load (load $-$ PV) mean absolute error over the next 24 hours (kWh, summed over the
-district's buildings), and $R^2$ of the LightGBM load and PV forecasts. LightGBM models are trained leave-district-out.}
-\label{tab:fc}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}lccccc@{}}
-\toprule
-District & Buildings & Seasonal MAE & LightGBM MAE & Load $R^2$ & PV $R^2$ \\
-\midrule
-Train      & 1--5   & 2.65 & \textbf{2.30} & 0.40 & 0.96 \\
-Validation & 6--10  & 3.28 & \textbf{2.83} & 0.36 & 0.95 \\
-Test       & 11--17 & 3.82 & \textbf{3.71} & 0.57 & 0.95 \\
-\bottomrule
-\end{tabular}}
-\end{table}
-
-Table~\ref{tab:mpc} reports the MPC and RL-tuned MPC controllers on the training buildings and with the Phase~III scores.
-Without a ramp penalty the MPC already matches the best RL on cost but ramps heavily ($D = 1.37$); a ramp weight of 2--3
-fixes this and gives a Phase~III public score of 0.807, better than any pure RL controller (0.853 for TQC). LightGBM
-forecasts improve it to 0.789. Letting RL retune the MPC's weights every hour adds a further gain on top of the LightGBM
-MPC: the RL-tuned MPC lowers the cost to 0.664 and carbon to 0.783 on the training buildings and reaches public 0.782
-and private 0.845; TQC (M131) and SAC (M135) give the same result, and a carbon weight of 1 in its reward (M133) changes
-nothing. On the seasonal forecasts, the RL tuning helps on the training buildings but not on the unseen ones (M129, public
-0.807): the agent learns weight choices specific to the training buildings when the forecasts are poor. With the tuned
-LightGBM forecasters, whose PV accuracy rises from about 90\% to 96\% while the load accuracy is unchanged, and a 30-hour
-horizon, the RL-tuned MPC (M152, TQC) reaches public $0.774 \pm 0.003$ and private $0.844 \pm 0.004$ over three seeds,
-our best result; with SAC and a 36-hour horizon (M155) it scores $0.775 \pm 0.001$ and $0.845 \pm 0.003$.
-
-To measure how much better forecasting could still give, we ran the same MPC (ramp weight 2) on the training buildings with
-its net-load forecast replaced by the true net load plus $k$ times the seasonal forecast's error: $S$ = 0.811, 0.761,
-0.713, 0.669 and 0.633 for $k = 1, 0.75, 0.5, 0.25, 0$. Perfect carbon-intensity forecasts alone changed nothing ($S$ = 0.810). This diagnostic uses
-the future and is only an upper bound: it shows that net-load forecasting, not the optimiser or the RL, is the main
-remaining limit.
-
-\subsection{District-Total Forecasting}\label{sec:fcvalue}
-Which forecast errors cost score? With the LightGBM MPC (ramp weight 3; $S$ = 0.784 on the training and 0.779 on the
-validation buildings), replacing the forecasts by the true future one part at a time gives: perfect PV $S$ = 0.782 and
-0.776, i.e.\ almost nothing; perfect load 0.648 and 0.648; perfect district total only (the per-building forecasts
-rescaled to the true total) 0.649 and 0.648; and the true load for only the next six hours 0.659 and 0.651. Almost the
-whole value of better forecasts therefore lies in the district's total load over the next few hours, not in the split
-between buildings or in PV. That total is also much easier to forecast: the per-building LightGBM forecasts are about
-58\% accurate (one minus the mean absolute error over the mean load) on the training buildings, their sum 75\%, because
-the buildings' unpredictable fluctuations partly cancel.
-
-Table~\ref{tab:totacc} compares the district-total forecasters on each district, none of them trained on the district it
-forecasts. All direct models beat the sum of the per-building forecasts by 1--2 points; the best LightGBM variant, F2 and
-F3 lie within one point of each other. The automated search chose the embedding MLP for every district, and its five
-best configurations scored within 0.1 points of each other, which suggests that about 78\% (72\% on the validation
-district) is close to what these inputs allow.
-
-Table~\ref{tab:totmpc} shows the effect on control. In the plain MPC, the F2 and F3 total forecasts lower the private
-score from 0.846 to 0.840 and 0.839 and the score on the seven test buildings from 0.910 to 0.902--0.903, mostly through
-the grid KPI; with F3 the public score of 0.7745 equals that of the RL-tuned M152. Averaging F2 and F3 adds nothing.
-Combined with the RL-tuned MPC, however, the better forecasts do not add up with the RL tuning: M169 (F2) and M170 (F3)
-score public 0.776 and 0.773 and private 0.841, the same as M152 on the same seed. The agent improves the
-fixed-weight MPC mainly by correcting for the weaknesses of the forecasts it was trained with, and that margin shrinks as
-the forecasts improve.
-
-\begin{table}[!t]
-\centering
-\caption{District-total load forecast accuracy over the next 24 hours (1 $-$ MAE / mean, \%), leave-district-out.}
-\label{tab:totacc}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}lcccc@{}}
-\toprule
-District & LightGBM, sum of buildings & LightGBM, direct (best) & F2 (deep) & F3 (searched) \\
-\midrule
-Train (1--5)       & 75.0 & \textbf{77.8} & 76.8 & 77.2 \\
-Validation (6--10) & 70.6 & \textbf{72.4} & 72.1 & 71.6 \\
-Test (11--17)      & 77.5 & \textbf{79.8} & 79.0 & 78.7 \\
-\bottomrule
-\end{tabular}}
-\end{table}
-
-\begin{table}[!t]
-\centering
-\caption{Controllers with the district-total forecasts (seed 42). Phase~I and $S$ on the training buildings, $S$ on the
-seven unseen test buildings, and the Phase~III public and private scores (lower is better).}
-\label{tab:totmpc}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}llccccc@{}}
-\toprule
-ID & Controller & Phase I & $S$ & Test $S$ & Public & Private \\
-\midrule
---   & MPC, LightGBM                & 0.742 & 0.784 & 0.910 & 0.781 & 0.846 \\
---   & MPC, LightGBM + F2 total     & 0.731 & 0.778 & \textbf{0.902} & 0.778 & 0.840 \\
---   & MPC, LightGBM + F3 total     & 0.729 & \textbf{0.775} & 0.903 & 0.7745 & \textbf{0.839} \\
---   & MPC, LightGBM + F2 + F3 total & 0.730 & 0.777 & \textbf{0.902} & 0.776 & \textbf{0.839} \\
-\midrule
-M152 & RL-tuned MPC, LightGBM       & \textbf{0.715} & 0.778 & 0.909 & \textbf{0.772} & 0.841 \\
-M169 & RL-tuned MPC, + F2 total     & 0.722 & 0.776 & 0.906 & 0.776 & 0.841 \\
-M170 & RL-tuned MPC, + F3 total     & 0.716 & \textbf{0.774} & 0.910 & 0.773 & 0.841 \\
-\bottomrule
-\end{tabular}}
-\end{table}
-
-\begin{table}[!t]
-\centering
-\caption{MPC and RL-tuned MPC. Phase~I, $S$, $C$, $G$, $D$ on the training buildings; Phase~III public and private scores
-over all 17 buildings (lower is better). RL-tuned controllers: seed 42, except M152 and M155 (mean of seeds 42, 100
-and 2026).}
-\label{tab:mpc}
-\resizebox{\columnwidth}{!}{%
-\begin{tabular}{@{}llccccccc@{}}
-\toprule
-ID & Controller & Phase I & $S$ & $C$ & $G$ & $D$ & Public & Private \\
-\midrule
---   & MPC, seasonal, no ramp term      & 0.774 & 0.974 & 0.706 & 0.842 & 1.374 & 0.958 & 1.083 \\
---   & MPC, seasonal, ramp weight 2     & 0.745 & 0.811 & 0.691 & 0.798 & 0.944 & 0.808 & 0.856 \\
---   & MPC, LightGBM, ramp weight 3     & 0.745 & 0.792 & 0.706 & 0.785 & \textbf{0.886} & 0.789 & 0.848 \\
-\midrule
-M129 & RL-tuned MPC, seasonal (TQC)     & 0.728 & 0.808 & 0.663 & 0.793 & 0.970 & 0.807 & 0.864 \\
-M131 & RL-tuned MPC, LightGBM (TQC)     & 0.723 & 0.787 & 0.664 & 0.783 & 0.914 & 0.782 & 0.845 \\
-M135 & RL-tuned MPC, LightGBM (SAC)     & 0.724 & 0.786 & 0.665 & 0.783 & 0.909 & 0.782 & \textbf{0.844} \\
-M133 & M131, carbon weight 1 in reward  & 0.727 & 0.786 & 0.669 & 0.784 & 0.905 & -- & -- \\
-M152 & tuned LightGBM, 30 h (TQC)       & 0.717 & \textbf{0.778} & 0.657 & \textbf{0.778} & 0.900 & \textbf{0.774} & \textbf{0.844} \\
-M155 & tuned LightGBM, 36 h (SAC)       & \textbf{0.715} & \textbf{0.778} & \textbf{0.653} & \textbf{0.778} & 0.904 & 0.775 & 0.845 \\
-\midrule
-M113 & best pure RL (TQC), 3 seeds      & 0.763 & 0.862 & 0.709 & 0.816 & 1.060 & 0.854 & -- \\
-\bottomrule
-\end{tabular}}
-\end{table}
-
-\subsection{Comparison with the Challenge Leaderboard}
-Table~\ref{tab:leader} places our best deployable controller in the Phase~III public leaderboard
-\cite{citylearn2022challenge}, which lists all 42 entries with their $C$, $G$ and $D$; these are blends of the training
-and validation districts, and for our row the same 0.4/0.6 blend is shown (mean of three seeds). The RL-tuned MPC (M152)
-scores 0.774, between the 7th (0.767) and 8th (0.789) entries; the winner reached 0.728. Per KPI
-(Table~\ref{tab:kpirank}), its carbon of 0.764 is lower than that of all 42 entries (best 0.803), its cost of 0.655
-ranks 4th, and the gap to the top lies almost entirely in the grid KPI ($D$ 0.902, 14th; 0.738 for the winner). Our
-reward weights carbon twice as much as cost and trades some grid smoothness for emissions, so the carbon rank reflects
-this trade-off as much as the controller's quality. Two differences favour the published entries: they trained their
-forecasters on the public buildings that make up 40\% of the public score, which ours never see, and their scores come
-from the official evaluator.
-
-The private leaderboard, which adds the seven test buildings and decided the winners, was visible only to the organisers,
-and its per-team KPIs are not published; the challenge overview reports only the participants' medians, $C = 0.792$,
-$G = 0.940$, $D = 0.996$ and score 0.907 \cite{nweye2023challenge}. With the same private weights (0.2/0.3/0.5), M152
-reaches $C = 0.728$, $G = 0.861$, $D = 0.942$ and a score of 0.844, better than the median on every KPI; whether its
+The private leaderboard added the seven test buildings and decided the winners. Only the organisers could see it, and its
+per-team values are not published. The challenge overview gives only the participants' medians \cite{nweye2023challenge}:
+$C = 0.792$, $G = 0.940$, $D = 0.996$ and a score of 0.907. With the same private weights (0.2/0.3/0.5), our controller
+reaches $C = 0.728$, $G = 0.861$, $D = 0.942$ and a score of 0.844. It beats the median on every KPI. Whether its
 carbon is also the lowest on the private leaderboard cannot be checked.
 
-On the Phase~I leaderboard ($(C+G)/2$ on the public training buildings) the best entries scored 0.631, 0.635 and 0.651;
-the RL-tuned MPC's 0.717 (M152) would rank 5th and the best pure RL (0.763) 11th. Phase~I was scored on the same public
-year the teams received in full, so optimisation on that year's actual data was possible: the runner-up used dynamic programming on
-it in Phase~I \cite{nweye2023challenge}. Phase~III, with buildings no team had seen, is the fair comparison for a deployable
-controller.
+On the Phase~I leaderboard, which scored $(C+G)/2$ on the training buildings, the best entries reached 0.631, 0.635 and
+0.651. Our 0.717 would rank 5th. But the teams had the full year of these homes during that phase, so they
+could optimise on the actual data. The runner-up, for instance, used dynamic programming on it \cite{nweye2023challenge}.
+The final phase, with homes no team had seen, is the fair test for a deployable controller.
 
 \begin{table}[!t]
 \centering
-\caption{Phase~III public leaderboard (top 8 of the 42 entries) with our best deployable controller (M152, mean of three
-seeds).}
+\caption{Phase~III public leaderboard (top 8 of the 42 entries) with the proposed controller (mean of three seeds).}
 \label{tab:leader}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}clcccc@{}}
@@ -785,7 +568,7 @@ Rank & Team & Score & $C$ & $G$ & $D$ \\
 5 & Orca               & 0.760 & 0.659 & 0.836 & 0.784 \\
 6 & Greener            & 0.764 & 0.663 & 0.821 & 0.809 \\
 7 & DivMARL            & 0.767 & 0.653 & 0.805 & 0.842 \\
--- & \textit{Ours: RL-tuned MPC (M152)} & \textit{0.774} & \textit{0.655} & \textbf{\textit{0.764}} & \textit{0.902} \\
+-- & \textit{Ours: RL-tuned MPC} & \textit{0.774} & \textit{0.655} & \textbf{\textit{0.764}} & \textit{0.902} \\
 8 & SCRG\_UA           & 0.789 & 0.666 & 0.880 & 0.820 \\
 \bottomrule
 \end{tabular}}
@@ -793,13 +576,12 @@ Rank & Team & Score & $C$ & $G$ & $D$ \\
 
 \begin{table}[!t]
 \centering
-\caption{Where the RL-tuned MPC (M152) would rank on each KPI among the 42 entries of the Phase~III public
-leaderboard.}
+\caption{Rank of the RL-tuned MPC on each KPI among the 42 entries of the Phase~III public leaderboard.}
 \label{tab:kpirank}
 \resizebox{\columnwidth}{!}{%
 \begin{tabular}{@{}lccl@{}}
 \toprule
-KPI & Ours (M152) & Best of 42 entries & Rank \\
+Indicator & Ours & Best of 42 entries & Rank \\
 \midrule
 Carbon $G$ & \textbf{0.764} & 0.803 (ambitiousengineers) & \textbf{1st} ($-5\%$ vs.\ the best entry) \\
 Cost $C$   & 0.655 & 0.639 (Together) & 4th \\
@@ -809,41 +591,77 @@ Overall    & 0.774 & 0.728 (Together) & between 7th and 8th \\
 \end{tabular}}
 \end{table}
 
+\subsection{Where the Remaining Gap Lies}\label{sec:fcvalue}
+Load is the hard part to forecast (Table~\ref{tab:fc}). We measure accuracy as one minus the mean absolute error over
+the mean load. A single home's hourly load is 50--59\% predictable with LightGBM, only a little better than with the
+seasonal rule. The district total is far easier, at 71--78\%, because the random swings of the homes partly cancel.
+This total is also what the grid KPIs and the clipped cost see. PV, by contrast, is forecast with about 96\%
+accuracy.
+
+\begin{table}[!t]
+\centering
+\caption{Load forecast accuracy over the next 24 hours ($1 -$ MAE / mean, \%), per building and for the district total.
+The forecasters are trained leave-district-out.}
+\label{tab:fc}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+ & \multicolumn{2}{c}{Per building} & \multicolumn{2}{c}{District total} \\
+\cmidrule(lr){2-3}\cmidrule(l){4-5}
+District & Seasonal & LightGBM & Seasonal & LightGBM \\
+\midrule
+Train (1--5)       & 54.5 & \textbf{58.3} & 74.7 & \textbf{75.0} \\
+Validation (6--10) & 45.1 & \textbf{50.1} & 69.3 & \textbf{70.6} \\
+Test (11--17)      & 57.6 & \textbf{58.7} & \textbf{78.4} & 77.5 \\
+\bottomrule
+\end{tabular}}
+\end{table}
+
+To find which errors cost score, we gave the fixed-weight version of the controller the true future for one part of its
+forecasts at a time (Fig.~\ref{fig:fcvalue}). This test uses the future, so it only bounds what better forecasts could
+give. With its own forecasts the controller scores $S = 0.784$ on the training and 0.779 on the validation buildings.
+Perfect PV forecasts change almost nothing (0.782 and 0.776). Perfect load forecasts lower $S$ to 0.648 in both
+districts, well below the winner's level. Nearly all of this value lies in the district total over the next few hours.
+Rescaling the building forecasts to the true district total gives 0.649 and 0.648, and the true load for only the next
+six hours gives 0.659 and 0.651. Neither the solver nor the tuner is the bottleneck. The hourly forecast of the
+district's total load is.
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{fig_forecast_value.pdf}
+\caption{Score of the fixed-weight controller when one part of its forecasts is replaced by the true future (an upper
+bound, not a deployable controller). The dotted line marks the winner's public score.}
+\label{fig:fcvalue}
+\end{figure}
+
 \section{Discussion}\label{sec:discussion}
-\emph{What matters most.} For pure RL, the ablations point to one principle: the reward should measure, on the right
-scale, what the evaluation measures, and as much of the uncontrollable variation as possible should be removed from it.
-SAC benefits more from these changes than PPO, and the gains add up. Beyond that, pure RL plateaus: on unseen buildings
-the best policies score about 0.85, and the larger step comes from adding explicit forecasts and an optimiser. RL then
-works best not as the controller itself but as the component that adapts the optimiser's trade-offs, and only once the
-forecasts are good: with LightGBM forecasts the RL-tuned MPC transfers its gains to unseen buildings, with the seasonal
-ones it does not.
+\emph{Why RL works best as a tuner.} The agent does not have to discover the daily patterns of price, PV and demand, or
+the physics of the batteries. The forecasts and the linear program supply both, and the agent's three actions only shift
+a schedule that is already sensible. A credit-assignment problem over thousands of hourly battery decisions becomes a
+much easier one. This explains why removing the solver costs far more (public 0.854) than removing the tuner (0.781).
+The tuning pays off only with good forecasts. With seasonal forecasts the agent fits its weights to the
+training buildings.
 
-\emph{Grid KPIs.} The pure RL controllers increase ramping relative to no battery; the MPC with a ramp penalty brings $D$
-below one, but the best controller's $D$ (0.916 on the public blend) is still the main gap to the winner (0.738). A
-stronger load-factor term in the MPC, and an RL reward weighted like the Phase~III score, are the obvious next steps;
-weighting the grid terms more in the reward of the seasonal RL-tuned MPC (M132) smoothed the load (D 0.934) but did not
-improve its Phase~III score.
+\emph{Grid KPIs.} The grid KPI ($D$ 0.902 on the public blend) is the main gap to the winner (0.738). Short
+import spikes, such as a top-up in the last cheap hour before the peak tariff (Fig.~\ref{fig:week}), are cheap in cost
+and carbon but costly in ramping and load factor. A load-factor term in the linear program is one remedy. Better
+forecasts of the district total, the quantity that matters most (Section~\ref{sec:fcvalue}), are the other.
 
-\emph{Deployability.} The controllers use only information available in a real building: present measurements, the
-environment's weather and tariff forecasts, and the measured battery power (for the counterfactual baseline during
-training). They transfer to unseen buildings without retraining, which supports their use as a starting point that can be
-fine-tuned on site.
+\emph{Deployability.} The controller uses only information a real building has. This includes present measurements, the
+environment's weather and tariff forecasts, forecasters trained on other homes, and the measured battery power for
+the training baseline. It runs on new districts of a different size without retraining. It could thus serve as a
+starting point that is fine-tuned on site.
 
-\emph{Limitations.} The study uses one climate, five training buildings and one year of data; carbon intensity and load
-are not forecast by the environment. Three seeds give reliable means at the full budget (standard deviations
-$\le 0.008$ for the best controllers), but at 60{,}000 steps the spread grows to 0.016--0.030, so single-seed screening at
-short budgets can mislead: the history features looked best with SAC on one seed, gave no reliable gain over three
-seeds, and only helped once combined with TQC at the full budget. Larger studies should use more seeds
-\cite{agarwal2021precipice}. Apart from M152 and M155 (three seeds), the RL-tuned MPC results are for one seed.
-The Phase~III scores are computed with the official formulas on CityLearn 2.1.2, not by the challenge's evaluator, and the
-dataset's weather ``forecasts'' equal the actual weather, which every entry received alike. Household load remains hard
-to forecast hourly: per-building deep forecasters (MLP, LSTM and Transformer) were no more accurate than LightGBM, and
-the district-total forecasters, deep or not, stop at about 78\% accuracy on these inputs. Better inputs (occupancy,
-appliance schedules or sub-hourly data) are more likely to help than larger models.
+\emph{Limitations.} The study covers one climate and one year of data, with five training buildings. The environment
+does not forecast carbon intensity or load. We compute the scores with the official formulas on CityLearn 2.1.2, not with
+the challenge's evaluator. The weather ``forecasts'' of the data equal the actual weather, but every entry received the
+same data. Three seeds give reliable means for the proposed controller, with standard deviations of at most 0.006, but
+most ablations use one seed. Hourly household load remains hard to forecast. Better inputs, such as occupancy, appliance
+schedules or sub-hourly data, are more likely to help than larger forecasting models.
 
 \section{Relevance to the Sustainable Development Goals}\label{sec:sdg}
-Battery control in grid-interactive buildings addresses several of the United Nations Sustainable Development Goals
-(SDGs). Table~\ref{tab:sdg} lists the goals this work contributes to, ordered by relevance.
+Battery control in grid-interactive buildings serves several of the United Nations Sustainable Development Goals (SDGs).
+Table~\ref{tab:sdg} lists them in order of relevance.
 
 \begin{table}[!t]
 \centering
@@ -856,37 +674,34 @@ Battery control in grid-interactive buildings addresses several of the United Na
 SDG & Relevance & Justification \\
 \midrule
 \textbf{SDG 13 -- Climate Action} & \fullstar\fullstar\fullstar\fullstar\fullstar &
-Dynamic carbon-aware reward shaping minimises CO$_2$ emissions by adapting battery dispatch to real-time grid carbon
-intensity. \\
+A carbon weight retuned every hour cuts CO$_2$ emissions by 22\% and gives the lowest carbon score of all leaderboard
+entries. \\
 \textbf{SDG 7 -- Affordable and Clean Energy} & \fullstar\fullstar\fullstar\fullstar\fullstar &
-Optimises battery storage and rooftop solar utilisation, improving energy efficiency and supporting renewable energy
-integration. \\
+Cuts electricity bills by about a third and stores rooftop PV surplus that would otherwise be exported for nothing. \\
 \textbf{SDG 11 -- Sustainable Cities and Communities} & \fullstar\fullstar\fullstar\fullstar\emptystar &
-Coordinates energy management across multiple residential buildings within the CityLearn smart-city environment. \\
+Coordinates the batteries of a whole district and smooths the load that the local grid supplies. \\
 \textbf{SDG 9 -- Industry, Innovation and Infrastructure} & \fullstar\fullstar\fullstar\emptystar\emptystar &
-Demonstrates an AI-based control framework for intelligent energy infrastructure. \\
+Shows a deployable AI control design for smart energy infrastructure. \\
 \textbf{SDG 12 -- Responsible Consumption and Production} & \fullstar\fullstar\emptystar\emptystar\emptystar &
-Encourages efficient electricity consumption and demand shifting toward lower-carbon periods. \\
+Shifts consumption toward cheaper, lower-carbon hours. \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \section{Conclusion}\label{sec:conclusion}
-We studied 100 deployable controllers for community battery storage on the CityLearn 2022 benchmark. A rule-based
-controller and naive RL rewards were no better than leaving the batteries idle. A score-aligned counterfactual reward,
-whose per-step terms add up to the official KPIs on the no-battery scale and measure the improvement over idling, made
-model-free RL effective: with SAC it reduced electricity cost by 28.0\% and emissions by 18.3\% over three seeds, and
-TQC with past-only history features gave the best pure-RL Phase~I score (0.763). Pure RL, however, plateaued at a
-Phase~III public score of about 0.85. Combining leakage-free LightGBM forecasts, a receding-horizon linear program and an
-RL agent that retunes the optimiser's weights every hour reduced cost by 34.3\% and emissions by 22.2\% and reached
-Phase~III public and private scores of $0.774 \pm 0.003$ and $0.844 \pm 0.004$ over three seeds, between 7th and 8th
-place of the public leaderboard, with the lowest carbon KPI of all 42 entries (0.764 vs.\ 0.803). The remaining gap to the winner lies in the grid KPI and,
-above all, in hourly load forecasting: with perfect net-load forecasts the same optimiser would score 0.633, and nearly
-all of that value lies in the district's total load over the next few hours. Forecasting that total directly, with
-models trained on random groups of other buildings, gave a plain MPC the best private score of the study (0.839),
-while the RL tuning no longer added to it. For
-practitioners, the recipe is to align the reward with the evaluation, use RL to adapt an optimiser rather than to replace
-it, and invest in forecasting.
+We proposed an RL-tuned model predictive controller for community battery storage. Leakage-free LightGBM forecasts drive
+a receding-horizon linear program, and a TQC agent retunes its ramping, carbon and storage weights every hour from
+district-level features. The agent learns from a reward that adds up to the KPIs. On the CityLearn 2022
+benchmark the controller cut the electricity cost by 34.3\% and the emissions by 22.2\% on the training buildings. Over
+three seeds it reached a public score of $0.774 \pm 0.003$ and a private score of $0.844 \pm 0.004$, between 7th and 8th
+place on the public leaderboard. Its carbon score of 0.764 is the lowest of all 42 entries (best 0.803), and every
+private KPI beats the participants' median.
+
+The ablations show that the solver contributes most and that the RL tuning adds a steady gain once the forecasts are
+good. The result is robust to the horizon and to the choice of RL algorithm. The remaining gap to the winner lies in the
+grid KPI and, above all, in the forecast of the district's total load over the next few hours. With perfect load
+forecasts, the same solver would score about 0.65. For practitioners, the lesson is to align the reward with the
+evaluation, to use RL to adapt an optimiser rather than to replace it, and to invest in forecasting.
 
 \bibliographystyle{IEEEtran}
 \bibliography{references}
