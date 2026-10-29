@@ -7,23 +7,20 @@
 \usepackage{multirow}
 \usepackage{url}
 \usepackage[hidelinks]{hyperref}
-\usepackage{pifont}
 \usepackage{array}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
-\newcommand{\fullstar}{\ding{72}}
-\newcommand{\emptystar}{\ding{73}}
+\definecolor{gb}{HTML}{4A5A6E}   % dull dark grey blue, the colour of all diagrams and graphs
 
 \graphicspath{{figures/}}
 
 \begin{document}
 
-\title{RL-Tuned Model Predictive Control with Leakage-Free Forecasts for Deployable Community Battery Storage}
+\title{Forecast-Driven Model Predictive Control with Reinforcement Learning Weight Tuning for Community Battery Storage}
 
-\author{Cherish~Vasant}
+\author{Elena, Margaret~Ellis, Anora~V and Cherish~Vasant}
 
-\markboth{IEEE Transactions on Smart Grid (manuscript draft)}%
-{Vasant: RL-Tuned MPC with Leakage-Free Forecasts for Deployable Community Battery Storage}
+\markboth{}{}
 
 \maketitle
 
@@ -188,16 +185,16 @@ $0.2\,S_\mathrm{train} + 0.3\,S_\mathrm{val} + 0.5\,S_\mathrm{test}$ \cite{nweye
 \resizebox{\textwidth}{!}{%
 \begin{tikzpicture}[
   font=\footnotesize, >={Stealth[length=2.2mm]},
-  box/.style={draw, rounded corners=2pt, align=center, inner sep=4pt, minimum height=11mm, fill=white},
-  obs/.style={box, fill=gray!10, text width=33mm},
-  fc/.style={box, fill=blue!7, text width=36mm},
-  rl/.style={box, fill=red!8, text width=40mm},
-  opt/.style={box, fill=green!8, text width=40mm},
-  env/.style={box, fill=orange!10, text width=34mm},
-  train/.style={box, dashed, fill=red!3, text width=38mm},
+  box/.style={draw=gb!80!black, rounded corners=2pt, align=center, inner sep=4pt, minimum height=11mm, fill=white},
+  obs/.style={box, fill=gb!6, text width=33mm},
+  fc/.style={box, fill=gb!14, text width=36mm},
+  rl/.style={box, fill=gb!30, text width=40mm},
+  opt/.style={box, fill=gb!22, text width=40mm},
+  env/.style={box, fill=gb!10, text width=34mm},
+  train/.style={box, dashed, fill=gb!4, text width=38mm},
   lab/.style={font=\scriptsize, align=center},
-  flow/.style={->, thick},
-  tflow/.style={->, thick, dashed, red!60!black}]
+  flow/.style={->, thick, gb!80!black},
+  tflow/.style={->, thick, dashed, gb}]
 
 \node[obs] (obs) at (0,0) {\textbf{Observations at hour $t$}\\[1pt] building load, PV, SoC,\\ net load, weather and its\\
   6/12/24-h forecasts, tariff,\\ carbon intensity};
@@ -205,7 +202,7 @@ $0.2\,S_\mathrm{train} + 0.3\,S_\mathrm{val} + 0.5\,S_\mathrm{test}$ \cite{nweye
   $h = 1,\dots,H$\\ \scriptsize trained and tuned on other districts};
 \node[fc] (seas) at (4.8,-0.9) {\textbf{Seasonal forecasters}\\[1pt] carbon intensity and price};
 \begin{scope}[on background layer]
-\node[draw, dashed, rounded corners=3pt, fill=blue!2, inner sep=5pt, fit=(lgb)(seas),
+\node[draw=gb, dashed, rounded corners=3pt, fill=gb!3, inner sep=5pt, fit=(lgb)(seas),
       label={[lab]above:Forecasting module}] (fcm) {};
 \end{scope}
 \node[opt] (mpc) at (11.2,1.3) {\textbf{MPC: linear program}\\[1pt]
@@ -260,8 +257,8 @@ same hour one week earlier.
 \begin{figure}[!t]
 \centering
 \begin{tikzpicture}[font=\scriptsize,
-  cell/.style={draw, minimum width=13mm, minimum height=6.5mm, align=center},
-  fcell/.style={cell, fill=blue!12}, ecell/.style={cell, fill=orange!25}, rcell/.style={cell, fill=red!12},
+  cell/.style={draw=gb!80!black, minimum width=13mm, minimum height=6.5mm, align=center},
+  fcell/.style={cell, fill=gb!14}, ecell/.style={cell, fill=gb!45}, rcell/.style={cell, fill=gb!45},
   ncell/.style={cell, fill=gray!5}]
 \node[font=\scriptsize\bfseries, align=center] at (1.3,1.0) {Data of district};
 \node at (0,0.45) {Train}; \node at (1.3,0.45) {Validation}; \node at (2.6,0.45) {Test};
@@ -307,13 +304,13 @@ hour later it solves the problem again with new forecasts (Fig.~\ref{fig:horizon
 \begin{tikzpicture}[font=\scriptsize, x=2.3mm, y=6mm]
 \foreach \r/\s/\lab in {0/0/hour $t$, 1/1/hour $t+1$, 2/2/hour $t+2$} {
   \node[anchor=east] at (-1,-\r) {\lab};
-  \draw[fill=green!12] (\s,-\r-0.3) rectangle (\s+30,-\r+0.3);
-  \draw[fill=red!40] (\s,-\r-0.3) rectangle (\s+1,-\r+0.3);
+  \draw[draw=gb!80!black, fill=gb!12] (\s,-\r-0.3) rectangle (\s+30,-\r+0.3);
+  \draw[draw=gb!80!black, fill=gb!75] (\s,-\r-0.3) rectangle (\s+1,-\r+0.3);
   \node at (\s+16,-\r) {plan for the next $H = 30$ hours};
 }
 \draw[->] (0,-2.8) -- (33,-2.8) node[below left] {time};
-\draw[fill=red!40] (0.5,-3.75) rectangle (1.5,-3.35); \node[anchor=west] at (2,-3.55) {applied to the batteries};
-\draw[fill=green!12] (14,-3.75) rectangle (15,-3.35); \node[anchor=west] at (15.5,-3.55) {planned, then discarded};
+\draw[draw=gb!80!black, fill=gb!75] (0.5,-3.75) rectangle (1.5,-3.35); \node[anchor=west] at (2,-3.55) {applied to the batteries};
+\draw[draw=gb!80!black, fill=gb!12] (14,-3.75) rectangle (15,-3.35); \node[anchor=west] at (15.5,-3.55) {planned, then discarded};
 \end{tikzpicture}}
 \caption{Receding horizon. Every hour the linear program plans 30 hours ahead with fresh forecasts and weights, and
 only the first hour is carried out.}
@@ -669,20 +666,20 @@ Table~\ref{tab:sdg} lists them in order of relevance.
 \label{tab:sdg}
 \footnotesize
 \renewcommand{\arraystretch}{1.25}
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.0cm}c>{\raggedright\arraybackslash}p{4.3cm}@{}}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{2.6cm}>{\raggedright\arraybackslash}p{5.6cm}@{}}
 \toprule
-SDG & Relevance & Justification \\
+SDG & Justification \\
 \midrule
-\textbf{SDG 13 -- Climate Action} & \fullstar\fullstar\fullstar\fullstar\fullstar &
+\textbf{SDG 13 -- Climate Action} &
 A carbon weight retuned every hour cuts CO$_2$ emissions by 22\% and gives the lowest carbon score of all leaderboard
 entries. \\
-\textbf{SDG 7 -- Affordable and Clean Energy} & \fullstar\fullstar\fullstar\fullstar\fullstar &
+\textbf{SDG 7 -- Affordable and Clean Energy} &
 Cuts electricity bills by about a third and stores rooftop PV surplus that would otherwise be exported for nothing. \\
-\textbf{SDG 11 -- Sustainable Cities and Communities} & \fullstar\fullstar\fullstar\fullstar\emptystar &
+\textbf{SDG 11 -- Sustainable Cities and Communities} &
 Coordinates the batteries of a whole district and smooths the load that the local grid supplies. \\
-\textbf{SDG 9 -- Industry, Innovation and Infrastructure} & \fullstar\fullstar\fullstar\emptystar\emptystar &
+\textbf{SDG 9 -- Industry, Innovation and Infrastructure} &
 Shows a deployable AI control design for smart energy infrastructure. \\
-\textbf{SDG 12 -- Responsible Consumption and Production} & \fullstar\fullstar\emptystar\emptystar\emptystar &
+\textbf{SDG 12 -- Responsible Consumption and Production} &
 Shifts consumption toward cheaper, lower-carbon hours. \\
 \bottomrule
 \end{tabular}
