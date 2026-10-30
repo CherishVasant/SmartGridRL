@@ -47,19 +47,26 @@ def fig_week():
     axes[0].plot(h, w['load'].values, color=GB, lw=0.9, label='RL-tuned MPC')
     axes[0].axhline(0.0, color='k', lw=0.4)
     axes[0].set_ylabel('Net load (kW)')
-    axes[0].legend(frameon=False, ncol=2, loc='lower center', bbox_to_anchor=(0.5, 1.0))
     soc = w[[c for c in w.columns if c.startswith('soc_b')]].mean(axis=1).values
     axes[1].plot(h, soc, color=GB_DARK, lw=0.9)
     axes[1].set_ylabel('Mean SoC')
     axes[1].set_ylim(0, 1)
-    axes[2].plot(h, w['pricing'].values, color=GB_DARK, lw=0.9)
-    axes[2].set_ylabel('Price (\\$/kWh)', color=GB_DARK)
+    axes[2].plot(h, w['pricing'].values, color=GB_DARK, lw=0.9, label='Price (left axis)')
+    axes[2].set_ylabel('Price (\\$/kWh)')
     ax2 = axes[2].twinx()
-    ax2.plot(h, w['carbon_intensity'].values, color=GB_MID, lw=0.9, ls='--')
-    ax2.set_ylabel('kgCO$_2$/kWh (dashed)', color=GB_MID)
+    ax2.plot(h, w['carbon_intensity'].values, color=GB_MID, lw=0.9, ls='--',
+             label='Carbon intensity (right axis)')
+    ax2.set_ylabel('kgCO$_2$/kWh')
     axes[2].set_xlabel('Hour of the week')
     fig.align_ylabels(axes)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0, 1, 0.90))
+    # one legend at the top: the two net-load lines on the first row, price and carbon intensity on the second
+    h0, l0 = axes[0].get_legend_handles_labels()
+    h2, l2 = axes[2].get_legend_handles_labels()
+    h3, l3 = ax2.get_legend_handles_labels()
+    fig.legend(h0, l0, frameon=False, ncol=2, loc='upper center', bbox_to_anchor=(0.5, 1.0))
+    fig.legend(h2 + h3, l2 + l3, frameon=False, ncol=2, loc='upper center', bbox_to_anchor=(0.5, 0.955),
+               handlelength=2.2)
     fig.savefig(HERE / 'fig_rltuned_week.pdf', bbox_inches='tight', pad_inches=0.02)
 
 
