@@ -19,55 +19,8 @@ plt.rcParams.update({'font.family': 'serif', 'font.size': 8, 'axes.titlesize': 8
                      'legend.fontsize': 7, 'xtick.labelsize': 7, 'ytick.labelsize': 7})
 
 
-def fig_learning():
-    """Mean per-step training reward of the RL weight tuner, three seeds. With the score-aligned counterfactual reward
-    this is the weighted KPI improvement over no battery (0 = as good as idling)."""
-    fig, ax = plt.subplots(figsize=(3.5, 1.7))
-    for seed, ls in [(42, '-'), (100, '--'), (2026, ':')]:
-        log = pd.read_csv(RESULTS / METHOD / f'seed_{seed}' / 'train_log.csv')
-        steps = log['env_step'].diff().fillna(log['env_step'].iloc[0])
-        ax.plot(log['episode'], log['reward'] / steps, ls, color=GB, lw=0.9, marker='o', ms=2,
-                label=f'seed {seed}')
-    ax.set_xlabel('Training episode (1 simulated year each)')
-    ax.set_ylabel('Reward per step')
-    ax.legend(frameon=False, loc='lower center', bbox_to_anchor=(0.5, 1.0), ncol=3)
-    fig.tight_layout()
-    fig.savefig(HERE / 'fig_rltuned_learning.pdf', bbox_inches='tight', pad_inches=0.02)
 
 
-def fig_week():
-    tr = pd.read_csv(RESULTS / METHOD / 'seed_42' / 'eval_trace.csv')
-    nb = pd.read_csv(RESULTS / 'B5_no_battery' / 'seed_0' / 'eval_trace.csv')
-    start = 24 * 182                                     # a week from early July
-    w = tr[(tr['step'] >= start) & (tr['step'] < start + 168)]
-    wn = nb[(nb['step'] >= start) & (nb['step'] < start + 168)]
-    h = (w['step'] - start).values
-    fig, axes = plt.subplots(3, 1, figsize=(3.5, 3.2), sharex=True)
-    axes[0].plot(h, wn['load'].values, color=GREY, lw=0.9, label='No battery')
-    axes[0].plot(h, w['load'].values, color=GB, lw=0.9, label='RL-tuned MPC')
-    axes[0].axhline(0.0, color='k', lw=0.4)
-    axes[0].set_ylabel('Net load (kW)')
-    soc = w[[c for c in w.columns if c.startswith('soc_b')]].mean(axis=1).values
-    axes[1].plot(h, soc, color=GB_DARK, lw=0.9)
-    axes[1].set_ylabel('Mean SoC')
-    axes[1].set_ylim(0, 1)
-    axes[2].plot(h, w['pricing'].values, color=GB_DARK, lw=0.9, label='Price (left axis)')
-    axes[2].set_ylabel('Price (\\$/kWh)')
-    ax2 = axes[2].twinx()
-    ax2.plot(h, w['carbon_intensity'].values, color=GB_MID, lw=0.9, ls='--',
-             label='Carbon intensity (right axis)')
-    ax2.set_ylabel('kgCO$_2$/kWh')
-    axes[2].set_xlabel('Hour of the week')
-    fig.align_ylabels(axes)
-    fig.tight_layout(rect=(0, 0, 1, 0.90))
-    # one legend at the top: the two net-load lines on the first row, price and carbon intensity on the second
-    h0, l0 = axes[0].get_legend_handles_labels()
-    h2, l2 = axes[2].get_legend_handles_labels()
-    h3, l3 = ax2.get_legend_handles_labels()
-    fig.legend(h0, l0, frameon=False, ncol=2, loc='upper center', bbox_to_anchor=(0.5, 1.0))
-    fig.legend(h2 + h3, l2 + l3, frameon=False, ncol=2, loc='upper center', bbox_to_anchor=(0.5, 0.955),
-               handlelength=2.2)
-    fig.savefig(HERE / 'fig_rltuned_week.pdf', bbox_inches='tight', pad_inches=0.02)
 
 
 def p3_scores():
@@ -75,28 +28,6 @@ def p3_scores():
     return d.loc[['P3_RLTUNED_M152', 'P3_RLTUNED_M152_s100', 'P3_RLTUNED_M152_s2026']]
 
 
-def fig_kpis():
-    """C, G, D and S of the proposed controller in each district (mean and std over three seeds)."""
-    r = p3_scores()
-    kpis = [('C', 'Cost $C$', GB_DARK), ('G', 'Carbon $G$', GB), ('D', 'Grid $D$', GB_MID),
-            ('phase3', 'Score $S$', GB_LIGHT)]
-    districts = [('train', 'Train (1–5)'), ('val', 'Validation (6–10)'), ('test', 'Test (11–17)')]
-    fig, ax = plt.subplots(figsize=(3.5, 1.65))
-    for j, (k, lab, col) in enumerate(kpis):
-        x = [i + (j - 1.5) * 0.19 for i in range(len(districts))]
-        means = [r[f'{d}_{k}'].mean() for d, _ in districts]
-        stds = [r[f'{d}_{k}'].std() for d, _ in districts]
-        ax.bar(x, means, width=0.18, yerr=stds, color=col, label=lab, error_kw={'lw': 0.6, 'capsize': 1})
-    ax.axhline(1.0, color='k', lw=0.6, ls='--')
-    ax.text(2.45, 1.005, 'no battery', fontsize=6, ha='right', va='bottom')
-    ax.set_xticks(range(len(districts)))
-    ax.set_xticklabels([lab for _, lab in districts])
-    ax.set_ylim(0.5, 1.08)
-    ax.set_ylabel('Relative to no battery')
-    ax.legend(frameon=False, ncol=4, loc='lower center', bbox_to_anchor=(0.5, 1.0), handlelength=1.0,
-              columnspacing=0.8)
-    fig.tight_layout()
-    fig.savefig(HERE / 'fig_rltuned_kpis.pdf', bbox_inches='tight', pad_inches=0.02)
 
 
 def fig_daily():
@@ -208,9 +139,6 @@ def fig_forecast_value():
 
 
 if __name__ == '__main__':
-    fig_learning()
-    fig_week()
-    fig_kpis()
     fig_daily()
     fig_leaderboard()
     fig_forecast_value()
