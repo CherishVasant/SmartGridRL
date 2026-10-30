@@ -81,7 +81,7 @@ def fig_kpis():
     kpis = [('C', 'Cost $C$', GB_DARK), ('G', 'Carbon $G$', GB), ('D', 'Grid $D$', GB_MID),
             ('phase3', 'Score $S$', GB_LIGHT)]
     districts = [('train', 'Train (1–5)'), ('val', 'Validation (6–10)'), ('test', 'Test (11–17)')]
-    fig, ax = plt.subplots(figsize=(3.5, 1.9))
+    fig, ax = plt.subplots(figsize=(3.5, 1.65))
     for j, (k, lab, col) in enumerate(kpis):
         x = [i + (j - 1.5) * 0.19 for i in range(len(districts))]
         means = [r[f'{d}_{k}'].mean() for d, _ in districts]
@@ -109,7 +109,7 @@ def fig_daily():
     p_rl = tr.groupby(hod(tr))['load'].mean()
     soc = tr.groupby(hod(tr))[[c for c in tr.columns if c.startswith('soc_b')]].mean().mean(axis=1)
     price = tr.groupby(hod(tr))['pricing'].mean()
-    fig, ax = plt.subplots(figsize=(3.5, 1.9))
+    fig, ax = plt.subplots(figsize=(3.5, 1.65))
     ax.axvspan(16, 21, color=GB_DARK, alpha=0.08, lw=0)
     ax.text(18.5, -4.6, 'peak tariff', fontsize=6, ha='center', color=GB_DARK)
     ax.plot(p_nb.index, p_nb.values, color=GREY, lw=1.0, label='Net load, no battery')
@@ -155,26 +155,26 @@ def fig_leaderboard():
     r = p3_scores()
     ours = {k: (0.4 * r[f'train_{k}'] + 0.6 * r[f'val_{k}']).mean() for k in ['C', 'G', 'D']}
     ours['S'] = r['public'].mean()
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.1, 2.1), gridspec_kw={'width_ratios': [1.6, 1]})
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.1, 1.75), gridspec_kw={'width_ratios': [1.6, 1]})
     teams = sorted(LEADERBOARD, key=lambda t: t[1])
     scores = [t[1] for t in teams] + [ours['S']]
     order = sorted(range(len(scores)), key=lambda i: scores[i])
     cols = [GB if i == len(teams) else GREY for i in order]
     a1.bar(range(len(order)), [scores[i] for i in order], color=cols, width=0.8)
     pos = order.index(len(teams))
-    a1.annotate('ours (0.774)', (pos, ours['S']), xytext=(pos + 6, 0.70), fontsize=7, color=GB,
+    a1.annotate('Proposed method (0.774)', (pos, ours['S']), xytext=(pos + 1.5, 0.93), fontsize=7, color=GB,
                 arrowprops={'arrowstyle': '-', 'color': GB, 'lw': 0.6})
     a1.axhline(1.0, color='k', lw=0.6, ls='--')
     a1.set_ylim(0.65, 1.12)
     a1.set_xlim(-1, len(order))
-    a1.set_xlabel('Rank among the 42 public entries and ours')
+    a1.set_xlabel('Rank (42 leaderboard entries and the proposed method)')
     a1.set_ylabel('Public score')
     g = [t[2] for t in LEADERBOARD]
     dd = [t[4] for t in LEADERBOARD]
-    a2.scatter(dd, g, s=10, color=GREY, label='42 entries', zorder=2)
-    a2.annotate('winner', (LEADERBOARD[0][4], LEADERBOARD[0][2]), xytext=(0.76, 0.86), fontsize=6, color=GB_DARK,
-                arrowprops={'arrowstyle': '-', 'color': GB_MID, 'lw': 0.5})
-    a2.scatter([ours['D']], [ours['G']], s=28, marker='*', color=GB, label='ours', zorder=3)
+    a2.scatter(dd, g, s=10, color=GREY, label='Leaderboard entries (42)', zorder=2)
+    a2.annotate('Challenge winner', (LEADERBOARD[0][4], LEADERBOARD[0][2]), xytext=(0.705, 0.95), fontsize=6,
+                color=GB_DARK, arrowprops={'arrowstyle': '-', 'color': GB_MID, 'lw': 0.5})
+    a2.scatter([ours['D']], [ours['G']], s=28, marker='*', color=GB, label='Proposed method', zorder=3)
     a2.set_xlabel('Grid $D$')
     a2.set_ylabel('Carbon $G$')
     a2.set_xlim(0.7, 1.12)
@@ -191,13 +191,13 @@ def fig_forecast_value():
     modes = [('base', 'LightGBM\nforecasts'), ('perfect_solar', 'perfect\nPV'),
              ('perfect_load_h6', 'perfect load,\nnext 6 h'), ('perfect_total', 'perfect\ndistrict total'),
              ('perfect_load', 'perfect\nload')]
-    fig, ax = plt.subplots(figsize=(3.5, 1.9))
+    fig, ax = plt.subplots(figsize=(3.5, 1.65))
     for j, (d, lab, col) in enumerate([('train', 'Train', GB), ('val', 'Validation', GB_LIGHT)]):
         vals = [base[d] if m == 'base' else
                 fv[(fv['mode'] == m) & (fv['district'] == d)]['phase3'].iloc[0] for m, _ in modes]
         ax.bar([i + (j - 0.5) * 0.36 for i in range(len(modes))], vals, width=0.34, color=col, label=lab)
     ax.axhline(0.728, color='k', lw=0.6, ls=':')
-    ax.text(4.6, 0.732, 'winner (public)', fontsize=6, ha='right', va='bottom')
+    ax.text(4.6, 0.732, 'challenge winner (public score)', fontsize=6, ha='right', va='bottom')
     ax.set_xticks(range(len(modes)))
     ax.set_xticklabels([lab for _, lab in modes], fontsize=6)
     ax.set_ylim(0.6, 0.82)
