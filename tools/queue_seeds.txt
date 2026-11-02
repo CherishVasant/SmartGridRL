@@ -1,0 +1,9 @@
+# Paper: extra seeds so every RL row of Table II has 3 seeds, and the proposed method 5
+M129_rl_tuned_mpc__s100
+M129_rl_tuned_mpc__s2026
+M139_rl_mpc_gbm_tuned__s100
+M139_rl_mpc_gbm_tuned__s2026
+M144_rl_mpc_tuned_h36__s100
+M144_rl_mpc_tuned_h36__s2026
+M152_rl_mpc_tuned_h30__s7
+M152_rl_mpc_tuned_h30__s1234

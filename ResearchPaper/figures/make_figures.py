@@ -25,7 +25,7 @@ plt.rcParams.update({'font.family': 'serif', 'font.size': 8, 'axes.titlesize': 8
 
 def p3_scores():
     d = pd.read_csv(RESULTS / 'phase3' / 'scores.csv').drop_duplicates('name', keep='last').set_index('name')
-    return d.loc[['P3_RLTUNED_M152', 'P3_RLTUNED_M152_s100', 'P3_RLTUNED_M152_s2026']]
+    return d.loc[['P3_RLTUNED_M152', 'P3_RLTUNED_M152_s100', 'P3_RLTUNED_M152_s2026', 'P3_RLTUNED_M152_s7', 'P3_RLTUNED_M152_s1234']]
 
 
 
@@ -40,7 +40,7 @@ def fig_daily():
     p_rl = tr.groupby(hod(tr))['load'].mean()
     soc = tr.groupby(hod(tr))[[c for c in tr.columns if c.startswith('soc_b')]].mean().mean(axis=1)
     price = tr.groupby(hod(tr))['pricing'].mean()
-    fig, ax = plt.subplots(figsize=(3.5, 1.65))
+    fig, ax = plt.subplots(figsize=(3.5, 1.35))
     ax.axvspan(16, 21, color=GB_DARK, alpha=0.08, lw=0)
     ax.text(18.5, -4.6, 'peak tariff', fontsize=6, ha='center', color=GB_DARK)
     ax.plot(p_nb.index, p_nb.values, color=GREY, lw=1.0, label='Net load, no battery')
@@ -86,7 +86,7 @@ def fig_leaderboard():
     r = p3_scores()
     ours = {k: (0.4 * r[f'train_{k}'] + 0.6 * r[f'val_{k}']).mean() for k in ['C', 'G', 'D']}
     ours['S'] = r['public'].mean()
-    fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.1, 1.75), gridspec_kw={'width_ratios': [1.6, 1]})
+    fig, (a1, a2) = plt.subplots(1, 2, figsize=(7.1, 1.45), gridspec_kw={'width_ratios': [1.6, 1]})
     teams = sorted(LEADERBOARD, key=lambda t: t[1])
     scores = [t[1] for t in teams] + [ours['S']]
     order = sorted(range(len(scores)), key=lambda i: scores[i])
@@ -103,7 +103,7 @@ def fig_leaderboard():
     g = [t[2] for t in LEADERBOARD]
     dd = [t[4] for t in LEADERBOARD]
     a2.scatter(dd, g, s=10, color=GREY, label='Leaderboard entries (42)', zorder=2)
-    a2.annotate('Challenge winner', (LEADERBOARD[0][4], LEADERBOARD[0][2]), xytext=(0.705, 0.95), fontsize=6,
+    a2.annotate('First-placed entry', (LEADERBOARD[0][4], LEADERBOARD[0][2]), xytext=(0.705, 0.95), fontsize=6,
                 color=GB_DARK, arrowprops={'arrowstyle': '-', 'color': GB_MID, 'lw': 0.5})
     a2.scatter([ours['D']], [ours['G']], s=28, marker='*', color=GB, label='Proposed method', zorder=3)
     a2.set_xlabel('Grid $D$')
@@ -122,13 +122,13 @@ def fig_forecast_value():
     modes = [('base', 'LightGBM\nforecasts'), ('perfect_solar', 'perfect\nPV'),
              ('perfect_load_h6', 'perfect load,\nnext 6 h'), ('perfect_total', 'perfect\ndistrict total'),
              ('perfect_load', 'perfect\nload')]
-    fig, ax = plt.subplots(figsize=(3.5, 1.65))
+    fig, ax = plt.subplots(figsize=(3.5, 1.35))
     for j, (d, lab, col) in enumerate([('train', 'Train', GB), ('val', 'Validation', GB_LIGHT)]):
         vals = [base[d] if m == 'base' else
                 fv[(fv['mode'] == m) & (fv['district'] == d)]['phase3'].iloc[0] for m, _ in modes]
         ax.bar([i + (j - 0.5) * 0.36 for i in range(len(modes))], vals, width=0.34, color=col, label=lab)
     ax.axhline(0.728, color='k', lw=0.6, ls=':')
-    ax.text(4.6, 0.732, 'challenge winner (public score)', fontsize=6, ha='right', va='bottom')
+    ax.text(4.6, 0.732, 'first-placed entry (public score)', fontsize=6, ha='right', va='bottom')
     ax.set_xticks(range(len(modes)))
     ax.set_xticklabels([lab for _, lab in modes], fontsize=6)
     ax.set_ylim(0.6, 0.82)
