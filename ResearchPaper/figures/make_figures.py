@@ -13,8 +13,8 @@ import pandas as pd
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE.parent.parent / 'results'
 METHOD = 'M152_rl_mpc_tuned_h30'          # the proposed RL-tuned MPC
-# dull dark grey-blue palette: main colour and its darker / lighter shades
-GB, GB_DARK, GB_MID, GB_LIGHT, GREY = '#4A5A6E', '#2E3A48', '#7A8899', '#AEB9C6', '#B4B4B4'
+# blue and green palette, with a neutral grey for the no-battery reference
+BLUE, BLUE_MID, BLUE_LIGHT, GREEN, GREEN_LIGHT, TEXT, GREY = '#2F6DB5', '#7FAAD6', '#BBD3EC', '#2E9E6B', '#A8D8BE', '#24405E', '#9AA5B1'
 plt.rcParams.update({'font.family': 'serif', 'font.size': 8, 'axes.titlesize': 8, 'axes.labelsize': 8,
                      'legend.fontsize': 7, 'xtick.labelsize': 7, 'ytick.labelsize': 7})
 
@@ -41,15 +41,15 @@ def fig_daily():
     soc = tr.groupby(hod(tr))[[c for c in tr.columns if c.startswith('soc_b')]].mean().mean(axis=1)
     price = tr.groupby(hod(tr))['pricing'].mean()
     fig, ax = plt.subplots(figsize=(3.5, 1.35))
-    ax.axvspan(16, 21, color=GB_DARK, alpha=0.08, lw=0)
-    ax.text(18.5, -4.6, 'peak tariff', fontsize=6, ha='center', color=GB_DARK)
+    ax.axvspan(16, 21, color=BLUE, alpha=0.12, lw=0)
+    ax.text(18.5, -4.6, 'peak tariff', fontsize=6, ha='center', color=TEXT)
     ax.plot(p_nb.index, p_nb.values, color=GREY, lw=1.0, label='Net load, no battery')
-    ax.plot(p_rl.index, p_rl.values, color=GB, lw=1.0, label='Net load, RL-tuned MPC')
+    ax.plot(p_rl.index, p_rl.values, color=BLUE, lw=1.1, label='Net load, RL-tuned MPC')
     ax.set_xlabel('Hour of the day')
     ax.set_ylabel('Mean net load (kW)')
     ax.set_xticks(range(0, 24, 3))
     ax2 = ax.twinx()
-    ax2.plot(soc.index, soc.values, color=GB_DARK, lw=0.9, ls='--', label='Mean SoC (right)')
+    ax2.plot(soc.index, soc.values, color=GREEN, lw=1.1, ls='--', label='Mean SoC (right)')
     ax2.set_ylabel('Mean SoC')
     ax2.set_ylim(0, 1)
     h1, l1 = ax.get_legend_handles_labels()
@@ -90,11 +90,11 @@ def fig_leaderboard():
     teams = sorted(LEADERBOARD, key=lambda t: t[1])
     scores = [t[1] for t in teams] + [ours['S']]
     order = sorted(range(len(scores)), key=lambda i: scores[i])
-    cols = [GB if i == len(teams) else GREY for i in order]
+    cols = [GREEN if i == len(teams) else BLUE_LIGHT for i in order]
     a1.bar(range(len(order)), [scores[i] for i in order], color=cols, width=0.8)
     pos = order.index(len(teams))
-    a1.annotate('Proposed method (0.774)', (pos, ours['S']), xytext=(pos + 1.5, 0.93), fontsize=7, color=GB,
-                arrowprops={'arrowstyle': '-', 'color': GB, 'lw': 0.6})
+    a1.annotate('Proposed method (0.774)', (pos, ours['S']), xytext=(pos + 1.5, 0.93), fontsize=7, color=GREEN,
+                arrowprops={'arrowstyle': '-', 'color': GREEN, 'lw': 0.6})
     a1.axhline(1.0, color='k', lw=0.6, ls='--')
     a1.set_ylim(0.65, 1.12)
     a1.set_xlim(-1, len(order))
@@ -102,10 +102,10 @@ def fig_leaderboard():
     a1.set_ylabel('Public score')
     g = [t[2] for t in LEADERBOARD]
     dd = [t[4] for t in LEADERBOARD]
-    a2.scatter(dd, g, s=10, color=GREY, label='Leaderboard entries (42)', zorder=2)
+    a2.scatter(dd, g, s=10, color=BLUE_MID, label='Leaderboard entries (42)', zorder=2)
     a2.annotate('First-placed entry', (LEADERBOARD[0][4], LEADERBOARD[0][2]), xytext=(0.705, 0.95), fontsize=6,
-                color=GB_DARK, arrowprops={'arrowstyle': '-', 'color': GB_MID, 'lw': 0.5})
-    a2.scatter([ours['D']], [ours['G']], s=28, marker='*', color=GB, label='Proposed method', zorder=3)
+                color=TEXT, arrowprops={'arrowstyle': '-', 'color': BLUE_MID, 'lw': 0.5})
+    a2.scatter([ours['D']], [ours['G']], s=34, marker='*', color=GREEN, label='Proposed method', zorder=3)
     a2.set_xlabel('Grid $D$')
     a2.set_ylabel('Carbon $G$')
     a2.set_xlim(0.7, 1.12)
@@ -123,7 +123,7 @@ def fig_forecast_value():
              ('perfect_load_h6', 'perfect load,\nnext 6 h'), ('perfect_total', 'perfect\ndistrict total'),
              ('perfect_load', 'perfect\nload')]
     fig, ax = plt.subplots(figsize=(3.5, 1.35))
-    for j, (d, lab, col) in enumerate([('train', 'Train', GB), ('val', 'Validation', GB_LIGHT)]):
+    for j, (d, lab, col) in enumerate([('train', 'Train', BLUE), ('val', 'Validation', GREEN_LIGHT)]):
         vals = [base[d] if m == 'base' else
                 fv[(fv['mode'] == m) & (fv['district'] == d)]['phase3'].iloc[0] for m, _ in modes]
         ax.bar([i + (j - 0.5) * 0.36 for i in range(len(modes))], vals, width=0.34, color=col, label=lab)
